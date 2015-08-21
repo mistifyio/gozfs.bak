@@ -3,8 +3,10 @@ package nv
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
+	"reflect"
 
 	xdr "github.com/davecgh/go-xdr/xdr2"
 )
@@ -52,6 +54,35 @@ const (
 	DOUBLE
 )
 
+var goToNV = map[string]dataType{
+	"bool":          BOOLEAN_VALUE,
+	"boolean_array": BOOLEAN_ARRAY,
+	"byte":          BYTE,
+	"byte_array":    BYTE_ARRAY,
+	"float64":       DOUBLE,
+	"int16":         INT16,
+	"int16_array":   INT16_ARRAY,
+	"int32":         INT32,
+	"int32_array":   INT32_ARRAY,
+	"int64":         INT64,
+	"int64_array":   INT64_ARRAY,
+	"int8":          INT8,
+	"int8_array":    INT8_ARRAY,
+	"nv.List":       NVLIST,
+	"nvlist_array":  NVLIST_ARRAY,
+	"string":        STRING,
+	"string_array":  STRING_ARRAY,
+	"time.Time":     HRTIME,
+	"uint16":        UINT16,
+	"uint16_array":  UINT16_ARRAY,
+	"uint32":        UINT32,
+	"uint32_array":  UINT32_ARRAY,
+	"uint64":        UINT64,
+	"uint64_array":  UINT64_ARRAY,
+	"uint8":         UINT8,
+	"uint8_array":   UINT8_ARRAY,
+}
+
 type List struct {
 	header
 	Pairs []pair
@@ -76,6 +107,100 @@ type pair struct {
 	Type        dataType
 	NElements   uint32
 	data        interface{}
+}
+
+func deref(v reflect.Value) reflect.Value {
+	for v.Kind() == reflect.Ptr {
+		v = v.Elem()
+	}
+	return v
+}
+
+func Encode(i interface{}) ([]byte, error) {
+	if i == nil {
+		return nil, errors.New("can not encode a nil pointer")
+	}
+
+	v := reflect.ValueOf(i)
+	if !v.IsValid() {
+		return nil, fmt.Errorf("type '%s' is invalid", v.Kind().String())
+	}
+	v = deref(v)
+	if v.Kind() != reflect.Struct {
+		return nil, fmt.Errorf("invalid type '%s', must be a struct", v.Kind().String())
+	}
+
+	buff := bytes.NewBuffer(nil)
+
+	var err error
+	if err = binary.Write(buff, binary.BigEndian, encoding{Encoding: 1, Endianess: 1}); err != nil {
+		fmt.Println("buf contents so far:", buff.Bytes())
+		return nil, err
+	}
+
+	if err = encodeList(v, buff); err != nil {
+		fmt.Println("buf contents so far:", buff.Bytes())
+		return nil, err
+	}
+
+	if err = binary.Write(buff, binary.BigEndian, []byte{0, 0, 0, 0, 0, 0, 0, 0}); err != nil {
+		fmt.Println("buf contents so far:", buff.Bytes())
+		return nil, err
+	}
+
+	return buff.Bytes(), nil
+}
+
+func encodeList(v reflect.Value, w io.Writer) error {
+	var err error
+	if err = binary.Write(w, binary.BigEndian, header{Flag: UNIQUE_NAME}); err != nil {
+		return err
+	}
+
+	if v.Type().String() != "nv.List" {
+		return fmt.Errorf("invalid type '%s' expected 'nv.List'", v.Type().String())
+	}
+	pairs := v.FieldByName("Pairs")
+	numPairs := pairs.Len()
+	if numPairs == 0 {
+		return fmt.Errorf("Pairs must not be empty")
+	}
+
+	type pv struct {
+		pair
+		Value interface{}
+	}
+
+	enc := xdr.NewEncoder(w)
+	for i := 0; i < numPairs; i++ {
+		p := pairs.Index(i)
+		pp := pv{
+			pair:  p.Interface().(pair),
+			Value: p.Interface().(pair).data,
+		}
+		switch pp.Type {
+		case BYTE:
+			fmt.Println("byte")
+			pp.Value = int8(pp.Value.(uint8))
+		case UINT8:
+			fmt.Println("uint8")
+			pp.Value = int(pp.Value.(uint8))
+		case BYTE_ARRAY:
+			fmt.Println("byte array")
+			num := pp.NElements
+			arrType := reflect.ArrayOf(num, p.Type())
+			arr := reflect.New(arrType)
+			pp.Value = arr.Interface()
+
+		}
+
+		_, err := enc.Encode(pp)
+		if err != nil {
+			return err
+		}
+	}
+
+	return err
 }
 
 func Decode(buf []byte) (List, error) {

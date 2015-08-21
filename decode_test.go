@@ -346,6 +346,5 @@ func TestDecode(t *testing.T) {
 			t.Fatalf("error mismatch, want:|%s|, got:|%s|, payload:|%v|\n",
 				s.err, err.Error(), s.payload)
 		}
-		fmt.Println("err:", err)
 	}
 }
