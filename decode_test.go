@@ -321,23 +321,23 @@ func init() {
 //go:generate make -C nv known_good_data_test.go
 func TestDecode(t *testing.T) {
 	for _, s := range good {
-		l, err := Decode(s)
+		l, err := Decode(s.payload)
 		if err != nil {
-			t.Fatal(err)
+			t.Fatal(s.name, "failed:", err)
 		}
+
 		for _, p := range l.Pairs {
 			fn, ok := checkers[p.Type]
 			if !ok {
-				t.Fatal("unknown type:", p.Type)
+				t.Fatal(s.name, "unknown type:", p.Type)
 			}
 			fn(t, p)
-
-			switch p.Type {
-			case BOOLEAN_VALUE:
-			}
 		}
 	}
-	for _, s := range bad {
+}
+
+func TestDecodeBad(t *testing.T) {
+	for _, s := range decode_bad {
 		_, err := Decode(s.payload)
 		if err == nil {
 			t.Fatalf("expected an error, wanted:|%s|, for payload: |%v|\n", s.err, s.payload)

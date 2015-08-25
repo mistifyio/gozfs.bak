@@ -40,7 +40,7 @@ const (
 	INT32_ARRAY
 	UINT32_ARRAY
 	INT64_ARRAY
-	UINT64_ARRAY
+	UINT64_ARRAY // 0x10
 	STRING_ARRAY
 	HRTIME
 	NVLIST
@@ -134,17 +134,10 @@ func Encode(i interface{}) ([]byte, error) {
 
 	var err error
 	if err = binary.Write(buff, binary.BigEndian, encoding{Encoding: 1, Endianess: 1}); err != nil {
-		fmt.Println("buf contents so far:", buff.Bytes())
 		return nil, err
 	}
 
 	if err = encodeList(v, buff); err != nil {
-		fmt.Println("buf contents so far:", buff.Bytes())
-		return nil, err
-	}
-
-	if err = binary.Write(buff, binary.BigEndian, []byte{0, 0, 0, 0, 0, 0, 0, 0}); err != nil {
-		fmt.Println("buf contents so far:", buff.Bytes())
 		return nil, err
 	}
 
@@ -152,9 +145,8 @@ func Encode(i interface{}) ([]byte, error) {
 }
 
 func encodeList(v reflect.Value, w io.Writer) error {
-	var err error
-	if err = binary.Write(w, binary.BigEndian, header{Flag: UNIQUE_NAME}); err != nil {
-		return err
+	if !v.IsValid() {
+		return errors.New("v is invalid")
 	}
 
 	if v.Type().String() != "nv.List" {
@@ -164,6 +156,11 @@ func encodeList(v reflect.Value, w io.Writer) error {
 	numPairs := pairs.Len()
 	if numPairs == 0 {
 		return fmt.Errorf("Pairs must not be empty")
+	}
+
+	var err error
+	if err = binary.Write(w, binary.BigEndian, header{Flag: UNIQUE_NAME}); err != nil {
+		return err
 	}
 
 	type pv struct {
@@ -178,29 +175,67 @@ func encodeList(v reflect.Value, w io.Writer) error {
 			pair:  p.Interface().(pair),
 			Value: p.Interface().(pair).data,
 		}
+
+		if pp.Type == UNKNOWN || pp.Type > DOUBLE {
+			return fmt.Errorf("invalid Type '%v'", pp.Type)
+		}
 		switch pp.Type {
 		case BYTE:
-			fmt.Println("byte")
 			pp.Value = int8(pp.Value.(uint8))
 		case UINT8:
-			fmt.Println("uint8")
-			pp.Value = int(pp.Value.(uint8))
+			pp.Value = int(int8(pp.Value.(uint8)))
 		case BYTE_ARRAY:
-			fmt.Println("byte array")
-			num := pp.NElements
-			arrType := reflect.ArrayOf(num, p.Type())
-			arr := reflect.New(arrType)
+			arrType := reflect.ArrayOf(int(pp.NElements), reflect.TypeOf(byte(0)))
+			arr := reflect.New(arrType).Elem()
+			for i, b := range pp.Value.([]byte) {
+				arr.Index(i).SetUint(uint64(b))
+			}
 			pp.Value = arr.Interface()
-
+		case UINT8_ARRAY:
+			n := int(pp.NElements)
+			sliceType := reflect.SliceOf(reflect.TypeOf(int32(0)))
+			slice := reflect.MakeSlice(sliceType, n, n)
+			for i, b := range pp.Value.([]uint8) {
+				slice.Index(i).SetInt(int64(int8(b)))
+			}
+			pp.Value = slice.Interface()
+		case STRING_ARRAY:
+			arrType := reflect.ArrayOf(int(pp.NElements), reflect.TypeOf(""))
+			arr := reflect.New(arrType).Elem()
+			for i, b := range pp.Value.([]string) {
+				arr.Index(i).SetString(b)
+			}
+			pp.Value = arr.Interface()
+		case NVLIST:
+			if _, err = enc.Encode(p.Interface()); err != nil {
+				return err
+			}
+			if err = encodeList(reflect.ValueOf(pp.Value), w); err != nil {
+				return err
+			}
+			continue
+		case NVLIST_ARRAY:
+			if _, err = enc.Encode(p.Interface()); err != nil {
+				return err
+			}
+			if pp.NElements == 0 {
+				return fmt.Errorf("empty NVLIST_ARRAY")
+			}
+			for _, l := range pp.Value.([]List) {
+				if err = encodeList(reflect.ValueOf(l), w); err != nil {
+					return err
+				}
+			}
+			continue
 		}
 
-		_, err := enc.Encode(pp)
+		_, err = enc.Encode(pp)
 		if err != nil {
 			return err
 		}
 	}
 
-	return err
+	return binary.Write(w, binary.BigEndian, uint64(0))
 }
 
 func Decode(buf []byte) (List, error) {

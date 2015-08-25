@@ -105,21 +105,29 @@ func (d decoder) DecodeByteArray() ([]byte, error) {
 }
 
 func (d decoder) DecodeInt8Array() ([]int8, error) {
-	i := []int8{}
-	_, err := d.Decode(&i)
-	return i, err
+	t := []int32{}
+	_, err := d.Decode(&t)
+	out := make([]int8, len(t))
+	for i := range t {
+		out[i] = int8(t[i])
+	}
+	return out, err
 }
 
 func (d decoder) DecodeInt16Array() ([]int16, error) {
-	i := []int16{}
-	_, err := d.Decode(&i)
-	return i, err
+	t := []int32{}
+	_, err := d.Decode(&t)
+	out := make([]int16, len(t))
+	for i := range t {
+		out[i] = int16(t[i])
+	}
+	return out, err
 }
 
 func (d decoder) DecodeInt32Array() ([]int32, error) {
-	i := []int32{}
-	_, err := d.Decode(&i)
-	return i, err
+	out := []int32{}
+	_, err := d.Decode(&out)
+	return out, err
 }
 
 func (d decoder) DecodeInt64Array() ([]int64, error) {
@@ -129,15 +137,23 @@ func (d decoder) DecodeInt64Array() ([]int64, error) {
 }
 
 func (d decoder) DecodeUint8Array() ([]uint8, error) {
-	i := []uint8{}
-	_, err := d.Decode(&i)
-	return i, err
+	t := []uint32{}
+	_, err := d.Decode(&t)
+	out := make([]uint8, len(t))
+	for i := range t {
+		out[i] = uint8(t[i])
+	}
+	return out, err
 }
 
 func (d decoder) DecodeUint16Array() ([]uint16, error) {
-	i := []uint16{}
-	_, err := d.Decode(&i)
-	return i, err
+	t := []uint32{}
+	_, err := d.Decode(&t)
+	out := make([]uint16, len(t))
+	for i := range t {
+		out[i] = uint16(t[i])
+	}
+	return out, err
 }
 
 func (d decoder) DecodeUint32Array() ([]uint32, error) {

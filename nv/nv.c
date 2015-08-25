@@ -12,6 +12,21 @@
 #define fnvlist_add_double(l, n, v) assert(nvlist_add_double(l, n, v) == 0)
 #define fnvlist_add_hrtime(l, n, v) assert(nvlist_add_hrtime(l, n, v) == 0)
 
+static void print(nvlist_t *list, char *name) {
+	char *buf = NULL;
+	size_t blen;
+	int err;
+	if ((err = nvlist_pack(list, &buf, &blen, NV_ENCODE_XDR, 0)) != 0) {
+		printf("error:%d\n", err);
+	}
+	printf("\t{name: \"%s\", payload: []byte(\"", name);
+	unsigned int i = 0;
+	for (; i < blen - 1; i++) {
+		printf("\\x%02x", buf[i] & 0xFF);
+	}
+	printf("\\x%02x\")},\n", buf[i]);
+}
+
 char *stra(char *s, int n) {
 	size_t sl = strlen(s) + 2;
 	char scomma[sl];
@@ -87,22 +102,6 @@ char *strf(double d) {
 	fnvlist_free(l); \
 } while(0)
 
-static void print(nvlist_t *list, char *comment) {
-	char *buf = NULL;
-	size_t blen;
-	int err;
-	if ((err = nvlist_pack(list, &buf, &blen, NV_ENCODE_XDR, 0)) != 0) {
-		printf("error:%d\n", err);
-	}
-	printf("\t/* %s */\n", comment);
-	printf("\t[]byte(\"");
-	unsigned int i = 0;
-	for (; i < blen - 1; i++) {
-		printf("\\x%02x", buf[i] & 0xFF);
-	}
-	printf("\\x%02x\"),\n", buf[i]);
-}
-
 #define arrset(array, alen, val) do { \
 	size_t i = 0; \
 	for (i = 0; i < alen; i++) { \
@@ -148,7 +147,7 @@ static void print(nvlist_t *list, char *comment) {
 
 #endif
 int main() {
-	printf("package nv\n\n/* !!! GENERATED FILE DO NOT EDIT !!! */\n\n//+build test\n\nvar good = [][]byte{\n");
+	printf("package nv\n\n/* !!! GENERATED FILE DO NOT EDIT !!! */\n\n//+build test\n\nvar good = []struct {\n\tname string\n\tpayload []byte\n}{\n");
 
 	nvlist_t *l = fnvlist_alloc();
 	fnvlist_add_boolean_value(l, "false", B_FALSE);
@@ -235,8 +234,8 @@ int main() {
 
 	l = fnvlist_alloc();
 	nvlist_t *le = fnvlist_alloc();
-	fnvlist_add_boolean_value(l, "false", B_FALSE);
-	fnvlist_add_boolean_value(l, "true", B_TRUE);
+	//fnvlist_add_boolean_value(l, "false", B_FALSE);
+	//fnvlist_add_boolean_value(l, "true", B_TRUE);
 	fnvlist_add_boolean_value(le, "false", B_FALSE);
 	fnvlist_add_boolean_value(le, "true", B_TRUE);
 	fnvlist_add_nvlist(l, "nvlist", le);
@@ -262,7 +261,7 @@ int main() {
 		fnvlist_add_double(l, strf(DBL_MAX/2), DBL_MAX/2);
 		fnvlist_add_double(l, strf(DBL_MAX-1), DBL_MAX-1);
 		fnvlist_add_double(l, strf(DBL_MAX), DBL_MAX);
-		print(l, stringify("double") "s");
+		print(l, stringify(double) "s");
 		fnvlist_free(l);
 	}
 
