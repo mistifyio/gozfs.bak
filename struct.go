@@ -85,7 +85,7 @@ var goToNV = map[string]dataType{
 
 type List struct {
 	header
-	Pairs []pair
+	Pairs []Pair
 }
 
 type encoding struct {
@@ -107,6 +107,11 @@ type pair struct {
 	Type        dataType
 	NElements   uint32
 	data        interface{}
+}
+
+type Pair struct {
+	pair
+	Value interface{}
 }
 
 func deref(v reflect.Value) reflect.Value {
@@ -163,18 +168,10 @@ func encodeList(v reflect.Value, w io.Writer) error {
 		return err
 	}
 
-	type pv struct {
-		pair
-		Value interface{}
-	}
-
 	enc := xdr.NewEncoder(w)
 	for i := 0; i < numPairs; i++ {
 		p := pairs.Index(i)
-		pp := pv{
-			pair:  p.Interface().(pair),
-			Value: p.Interface().(pair).data,
-		}
+		pp := p.Interface().(Pair)
 
 		if pp.Type == UNKNOWN || pp.Type > DOUBLE {
 			return fmt.Errorf("invalid Type '%v'", pp.Type)
@@ -207,7 +204,7 @@ func encodeList(v reflect.Value, w io.Writer) error {
 			}
 			pp.Value = arr.Interface()
 		case NVLIST:
-			if _, err = enc.Encode(p.Interface()); err != nil {
+			if _, err = enc.Encode(pp.pair); err != nil {
 				return err
 			}
 			if err = encodeList(reflect.ValueOf(pp.Value), w); err != nil {
@@ -215,7 +212,7 @@ func encodeList(v reflect.Value, w io.Writer) error {
 			}
 			continue
 		case NVLIST_ARRAY:
-			if _, err = enc.Encode(p.Interface()); err != nil {
+			if _, err = enc.Encode(pp.pair); err != nil {
 				return err
 			}
 			if pp.NElements == 0 {
@@ -360,7 +357,8 @@ func decodeList(r io.ReadSeeker) (List, error) {
 		}
 
 		p.data = v
-		l.Pairs = append(l.Pairs, p)
+		pp := Pair{pair: p, Value: v}
+		l.Pairs = append(l.Pairs, pp)
 
 		var end uint64
 		err := binary.Read(r, binary.BigEndian, &end)

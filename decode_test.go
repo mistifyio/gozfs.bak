@@ -256,7 +256,7 @@ func check_uint64_array(t *testing.T, p pair) {
 func check_nvlist(t *testing.T, p pair) {
 	list := p.data.(List)
 	for _, pair := range list.Pairs {
-		checkers[pair.Type](t, pair)
+		checkers[pair.Type](t, pair.pair)
 	}
 }
 func check_nvlist_array(t *testing.T, p pair) {
@@ -331,7 +331,7 @@ func TestDecode(t *testing.T) {
 			if !ok {
 				t.Fatal(s.name, "unknown type:", p.Type)
 			}
-			fn(t, p)
+			fn(t, p.pair)
 		}
 	}
 }
