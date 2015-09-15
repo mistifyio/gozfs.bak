@@ -147,7 +147,16 @@ char *strf(double d) {
 
 #endif
 int main() {
-	printf("package nv\n\n/* !!! GENERATED FILE DO NOT EDIT !!! */\n\n//+build test\n\nvar good = []struct {\n\tname string\n\tpayload []byte\n}{\n");
+	printf("package nv\n"
+	       "\n"
+	       "/* !!! GENERATED FILE DO NOT EDIT !!! */\n"
+	       "\n"
+	       "//+build test\n"
+	       "\n"
+	       "var good = []struct {\n"
+	       "\tname string\n"
+	       "\tpayload []byte\n"
+	       "}{\n");
 
 	nvlist_t *l = fnvlist_alloc();
 	fnvlist_add_boolean_value(l, "false", B_FALSE);
