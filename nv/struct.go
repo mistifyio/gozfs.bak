@@ -159,9 +159,6 @@ func encodeList(v reflect.Value, w io.Writer) error {
 	}
 	pairs := v.FieldByName("Pairs")
 	numPairs := pairs.Len()
-	if numPairs == 0 {
-		return fmt.Errorf("Pairs must not be empty")
-	}
 
 	var err error
 	if err = binary.Write(w, binary.BigEndian, header{Flag: UNIQUE_NAME}); err != nil {
@@ -172,6 +169,7 @@ func encodeList(v reflect.Value, w io.Writer) error {
 	for i := 0; i < numPairs; i++ {
 		p := pairs.Index(i)
 		pp := p.Interface().(Pair)
+		pp.NElements = 1
 
 		if pp.Type == UNKNOWN || pp.Type > DOUBLE {
 			return fmt.Errorf("invalid Type '%v'", pp.Type)
