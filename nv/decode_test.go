@@ -318,7 +318,7 @@ func init() {
 	}
 }
 
-//go:generate make -C nv known_good_data_test.go
+//go:generate make -C _test known_good_data_test.go
 func TestDecode(t *testing.T) {
 	for _, s := range good {
 		l, err := Decode(s.payload)
