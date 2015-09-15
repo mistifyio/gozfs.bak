@@ -154,7 +154,7 @@ int main() {
 	       "//+build test\n"
 	       "\n"
 	       "var good = []struct {\n"
-	       "\tname string\n"
+	       "\tname    string\n"
 	       "\tpayload []byte\n"
 	       "}{\n");
 
