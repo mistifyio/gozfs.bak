@@ -12,6 +12,8 @@
 #define fnvlist_add_double(l, n, v) assert(nvlist_add_double(l, n, v) == 0)
 #define fnvlist_add_hrtime(l, n, v) assert(nvlist_add_hrtime(l, n, v) == 0)
 
+// TODO: add a dump for an empty nvlist
+
 static void print(nvlist_t *list, char *name) {
 	char *buf = NULL;
 	size_t blen;
