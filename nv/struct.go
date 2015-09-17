@@ -281,6 +281,19 @@ func Decode(buf []byte) (List, error) {
 	return decodeList(b)
 }
 
+func isEnd(r io.ReadSeeker) (bool, error) {
+	var end uint64
+	err := binary.Read(r, binary.BigEndian, &end)
+	if err != nil {
+		return false, err
+	}
+	if end == 0 {
+		return true, nil
+	}
+	_, err = r.Seek(-8, 1)
+	return false, err
+}
+
 func decodeList(r io.ReadSeeker) (List, error) {
 	l := List{}
 	err := binary.Read(r, binary.BigEndian, &l.header)
@@ -381,18 +394,14 @@ func decodeList(r io.ReadSeeker) (List, error) {
 		pp := Pair{pair: p, Value: v}
 		l.Pairs = append(l.Pairs, pp)
 
-		var end uint64
-		err := binary.Read(r, binary.BigEndian, &end)
+		end, err := isEnd(r)
 		if err != nil {
 			return List{}, err
 		}
-		if end == 0 {
+		if end {
 			break
 		}
-		_, err = r.Seek(-8, 1)
-		if err != nil {
-			return List{}, err
-		}
+
 	}
 	return List(l), nil
 }
