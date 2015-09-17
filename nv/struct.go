@@ -309,6 +309,14 @@ func decodeList(r io.ReadSeeker) (List, error) {
 	}
 
 	for {
+		end, err := isEnd(r)
+		if err != nil {
+			return List{}, err
+		}
+		if end {
+			break
+		}
+
 		p := pair{}
 		_, err = xdr.Unmarshal(r, &p)
 		if err != nil {
@@ -393,14 +401,6 @@ func decodeList(r io.ReadSeeker) (List, error) {
 		p.data = v
 		pp := Pair{pair: p, Value: v}
 		l.Pairs = append(l.Pairs, pp)
-
-		end, err := isEnd(r)
-		if err != nil {
-			return List{}, err
-		}
-		if end {
-			break
-		}
 
 	}
 	return List(l), nil
