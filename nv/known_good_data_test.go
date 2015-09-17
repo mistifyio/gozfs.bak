@@ -2,8 +2,6 @@ package nv
 
 /* !!! GENERATED FILE DO NOT EDIT !!! */
 
-//+build test
-
 var good = []struct {
 	name    string
 	payload []byte
