@@ -12,8 +12,6 @@
 #define fnvlist_add_double(l, n, v) assert(nvlist_add_double(l, n, v) == 0)
 #define fnvlist_add_hrtime(l, n, v) assert(nvlist_add_hrtime(l, n, v) == 0)
 
-// TODO: add a dump for an empty nvlist
-
 static void print(nvlist_t *list, char *name) {
 	char *buf = NULL;
 	size_t blen;
@@ -172,6 +170,12 @@ int main() {
 		arrset(array, len, B_FALSE); fnvlist_add_boolean_array(l, "false,false,false,false,false", array, len);
 		arrset(array, len, B_TRUE); fnvlist_add_boolean_array(l, "true,true,true,true,true", array, len);
 		print(l, "bool array");
+		fnvlist_free(l);
+	}
+
+	{
+		l = fnvlist_alloc();
+		print(l, "empty");
 		fnvlist_free(l);
 	}
 
