@@ -180,13 +180,28 @@ func encodeList(v reflect.Value, w io.Writer) error {
 		case UINT8:
 			pp.Value = int(int8(pp.Value.(uint8)))
 		case BYTE_ARRAY:
-			arrType := reflect.ArrayOf(int(pp.NElements), reflect.TypeOf(byte(0)))
+			pp.NElements = uint32(len(pp.Value.([]byte)))
+			n := int(pp.NElements)
+			arrType := reflect.ArrayOf(n, reflect.TypeOf(byte(0)))
 			arr := reflect.New(arrType).Elem()
 			for i, b := range pp.Value.([]byte) {
 				arr.Index(i).SetUint(uint64(b))
 			}
 			pp.Value = arr.Interface()
+		case BOOLEAN_ARRAY:
+			pp.NElements = uint32(len(pp.Value.([]bool)))
+		case INT8_ARRAY:
+			pp.NElements = uint32(len(pp.Value.([]int8)))
+		case INT16_ARRAY:
+			pp.NElements = uint32(len(pp.Value.([]int16)))
+		case INT32_ARRAY:
+			pp.NElements = uint32(len(pp.Value.([]int32)))
+		case INT64_ARRAY:
+			pp.NElements = uint32(len(pp.Value.([]int64)))
 		case UINT8_ARRAY:
+			// this one is weird since UINT8s are encoded as char
+			// aka int32s... :(
+			pp.NElements = uint32(len(pp.Value.([]uint8)))
 			n := int(pp.NElements)
 			sliceType := reflect.SliceOf(reflect.TypeOf(int32(0)))
 			slice := reflect.MakeSlice(sliceType, n, n)
@@ -194,7 +209,14 @@ func encodeList(v reflect.Value, w io.Writer) error {
 				slice.Index(i).SetInt(int64(int8(b)))
 			}
 			pp.Value = slice.Interface()
+		case UINT16_ARRAY:
+			pp.NElements = uint32(len(pp.Value.([]uint16)))
+		case UINT32_ARRAY:
+			pp.NElements = uint32(len(pp.Value.([]uint32)))
+		case UINT64_ARRAY:
+			pp.NElements = uint32(len(pp.Value.([]uint64)))
 		case STRING_ARRAY:
+			pp.NElements = uint32(len(pp.Value.([]string)))
 			arrType := reflect.ArrayOf(int(pp.NElements), reflect.TypeOf(""))
 			arr := reflect.New(arrType).Elem()
 			for i, b := range pp.Value.([]string) {
@@ -210,6 +232,7 @@ func encodeList(v reflect.Value, w io.Writer) error {
 			}
 			continue
 		case NVLIST_ARRAY:
+			pp.NElements = uint32(len(pp.Value.([]List)))
 			if _, err = enc.Encode(pp.pair); err != nil {
 				return err
 			}
