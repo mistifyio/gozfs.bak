@@ -359,7 +359,7 @@ func encode(v reflect.Value, w io.Writer) (int, error) {
 		value := p.data
 		size := 0
 		fmt.Fprintf(os.Stderr, "name, value: %v, %v\n", name, value)
-		switch field.Kind() {
+		switch t := field.Kind(); t {
 		case reflect.String:
 			p.Type = STRING
 		case reflect.Uint64:
@@ -369,6 +369,8 @@ func encode(v reflect.Value, w io.Writer) (int, error) {
 		case reflect.Struct:
 			p.Type = NVLIST
 			size = 24
+		default:
+			panic(fmt.Sprint("unknown type:", t))
 		}
 
 		if p.Type == UNKNOWN || p.Type > DOUBLE {
@@ -483,26 +485,33 @@ func encode(v reflect.Value, w io.Writer) (int, error) {
 	return size + 8, nil
 }
 
-func Decode(buf []byte) (List, error) {
+type mVal struct {
+	Name  string
+	Type  dataType
+	Value interface{}
+}
+type mList map[string]mVal
+
+func Decode(buf []byte) (mList, error) {
 	b := bytes.NewReader(buf)
 
 	enc := encoding{}
 	err := binary.Read(b, binary.BigEndian, &enc)
 	if err != nil {
-		return List{}, err
+		return nil, err
 	}
 
 	if enc.Encoding > 1 {
-		return List{}, fmt.Errorf("invalid encoding: %v", enc.Encoding)
+		return nil, fmt.Errorf("invalid encoding: %v", enc.Encoding)
 	}
 	if enc.Endianess > 1 {
-		return List{}, fmt.Errorf("invalid endianess: %v", enc.Endianess)
+		return nil, fmt.Errorf("invalid endianess: %v", enc.Endianess)
 	}
 	if enc.Reserved1 != 0 {
-		return List{}, fmt.Errorf("unexpected reserved1 value: %v", enc.Reserved1)
+		return nil, fmt.Errorf("unexpected reserved1 value: %v", enc.Reserved1)
 	}
 	if enc.Reserved2 != 0 {
-		return List{}, fmt.Errorf("unexpected reserved2 value: %v", enc.Reserved2)
+		return nil, fmt.Errorf("unexpected reserved2 value: %v", enc.Reserved2)
 	}
 
 	return decodeList(b)
@@ -521,24 +530,25 @@ func isEnd(r io.ReadSeeker) (bool, error) {
 	return false, err
 }
 
-func decodeList(r io.ReadSeeker) (List, error) {
-	l := List{}
-	err := binary.Read(r, binary.BigEndian, &l.header)
+func decodeList(r io.ReadSeeker) (mList, error) {
+	var h header
+	err := binary.Read(r, binary.BigEndian, &h)
 	if err != nil {
-		return List{}, err
+		return nil, err
 	}
 
-	if l.Version != 0 {
-		return List{}, fmt.Errorf("unexpected version: %v", l.Version)
+	if h.Version != 0 {
+		return nil, fmt.Errorf("unexpected version: %v", h.Version)
 	}
-	if l.Flag < UNIQUE_NAME || l.Flag > UNIQUE_NAME_TYPE {
-		return List{}, fmt.Errorf("unexpected Flag: %v", l.Flag)
+	if h.Flag < UNIQUE_NAME || h.Flag > UNIQUE_NAME_TYPE {
+		return nil, fmt.Errorf("unexpected Flag: %v", h.Flag)
 	}
 
+	m := mList{}
 	for {
 		end, err := isEnd(r)
 		if err != nil {
-			return List{}, err
+			return nil, err
 		}
 		if end {
 			break
@@ -547,7 +557,7 @@ func decodeList(r io.ReadSeeker) (List, error) {
 		p := pair{}
 		_, err = xdr.Unmarshal(r, &p)
 		if err != nil {
-			return List{}, err
+			return nil, err
 		}
 
 		var v interface{}
@@ -608,27 +618,33 @@ func decodeList(r io.ReadSeeker) (List, error) {
 		case NVLIST:
 			v, err = decodeList(r)
 		case NVLIST_ARRAY:
-			arr := make([]List, 0, p.NElements)
+			arr := make([]mList, 0, p.NElements)
 			for i := uint32(0); i < p.NElements; i++ {
-				var list List
-				list, err = decodeList(r)
+				var m mList
+				m, err = decodeList(r)
 				if err != nil {
 					break
 				}
-				arr = append(arr, list)
+				arr = append(arr, m)
 			}
 			v = arr
 		default:
-			return List{}, fmt.Errorf("unknown type: %v", p.Type)
+			return nil, fmt.Errorf("unknown type: %v", p.Type)
 		}
 		if err != nil {
-			return List{}, err
+			return nil, err
 		}
 
-		p.data = v
-		pp := Pair{pair: p, Value: v}
-		l.Pairs = append(l.Pairs, pp)
+		m[p.Name] = mVal{
+			Name:  p.Name,
+			Type:  p.Type,
+			Value: v,
+		}
+
+		//p.data = v
+		//pp := Pair{pair: p, Value: v}
+		//l.Pairs = append(l.Pairs, pp)
 
 	}
-	return List(l), nil
+	return m, nil
 }

@@ -7,14 +7,16 @@ import (
 	"time"
 )
 
-func check_array(t *testing.T, p pair, l int, fn func([]string)) {
+func check_array(t *testing.T, p mVal, l int, fn func([]string)) {
 	expecteds := strings.Split(p.Name, ",")
 	if len(expecteds) < 2 {
 		t.Fatal("p.Name does not seem to be a list of expected values:", p.Name)
 	}
-	if l != int(p.NElements) {
-		t.Fatal("array length does not match NElements, want:", p.NElements, "got:", l)
-	}
+	/*
+		if l != int(p.NElements) {
+			t.Fatal("array length does not match NElements, want:", p.NElements, "got:", l)
+		}
+	*/
 	if len(expecteds) != l {
 		t.Fatal("length mismatch between expected and decoded arrays, expected:",
 			len(expecteds), "decoded:", l)
@@ -22,51 +24,51 @@ func check_array(t *testing.T, p pair, l int, fn func([]string)) {
 	fn(expecteds)
 }
 
-func check_boolean(t *testing.T, p pair) {
+func check_boolean(t *testing.T, p mVal) {
 	check_boolean_value(t, p)
 }
-func check_boolean_value(t *testing.T, p pair) {
+func check_boolean_value(t *testing.T, p mVal) {
 	exp := false
 	_, err := fmt.Sscanf(p.Name, "%t", &exp)
 	if err != nil {
 		t.Fatal(err)
 	}
-	got := p.data.(bool)
+	got := p.Value.(bool)
 	if got != exp {
 		t.Fatal("expected:", exp, "got:", got)
 	}
 }
-func check_boolean_array(t *testing.T, p pair) {
-	arr := p.data.([]bool)
+func check_boolean_array(t *testing.T, p mVal) {
+	arr := p.Value.([]bool)
 	check_array(t, p, len(arr), func(expecteds []string) {
 		for i := range arr {
-			check_boolean_value(t, pair{Name: expecteds[i], data: arr[i]})
+			check_boolean_value(t, mVal{Name: expecteds[i], Value: arr[i]})
 		}
 	})
 }
 
-func check_byte(t *testing.T, p pair) {
+func check_byte(t *testing.T, p mVal) {
 	d := int(0)
 	_, err := fmt.Sscanf(p.Name, "%d", &d)
 	if err != nil {
 		t.Fatal(err)
 	}
 	exp := byte(d)
-	got := p.data.(byte)
+	got := p.Value.(byte)
 	if got != exp {
 		t.Fatal("expected:", exp, "got:", got)
 	}
 }
-func check_byte_array(t *testing.T, p pair) {
-	arr := p.data.([]byte)
+func check_byte_array(t *testing.T, p mVal) {
+	arr := p.Value.([]byte)
 	check_array(t, p, len(arr), func(expecteds []string) {
 		for i := range arr {
-			check_byte(t, pair{Name: expecteds[i], data: arr[i]})
+			check_byte(t, mVal{Name: expecteds[i], Value: arr[i]})
 		}
 	})
 }
 
-func check_double(t *testing.T, p pair) {
+func check_double(t *testing.T, p mVal) {
 	exp := float64(0)
 	// is a hack, but good enough
 	_, err := fmt.Sscanf(p.Name, "%f", &exp)
@@ -74,220 +76,220 @@ func check_double(t *testing.T, p pair) {
 		t.Fatal(err)
 	}
 
-	got := p.data.(float64)
+	got := p.Value.(float64)
 	if got != exp {
 		t.Fatal("expected:", exp, "got:", got)
 	}
 }
 
-func check_hrtime(t *testing.T, p pair) {
+func check_hrtime(t *testing.T, p mVal) {
 	d := int64(0)
 	_, err := fmt.Sscanf(p.Name, "%d", &d)
 	if err != nil {
 		t.Fatal(err)
 	}
 	exp := time.Duration(d)
-	got := p.data.(time.Duration)
+	got := p.Value.(time.Duration)
 	if got != exp {
 		t.Fatal("expected:", exp, "got:", got)
 	}
 }
 
-func check_int8(t *testing.T, p pair) {
+func check_int8(t *testing.T, p mVal) {
 	exp := int8(0)
 	_, err := fmt.Sscanf(p.Name, "%d", &exp)
 	if err != nil {
 		t.Fatal(err)
 	}
-	got := p.data.(int8)
+	got := p.Value.(int8)
 	if got != exp {
 		t.Fatal("expected:", exp, "got:", got)
 	}
 }
-func check_int8_array(t *testing.T, p pair) {
-	arr := p.data.([]int8)
+func check_int8_array(t *testing.T, p mVal) {
+	arr := p.Value.([]int8)
 	check_array(t, p, len(arr), func(expecteds []string) {
 		for i := range arr {
-			check_int8(t, pair{Name: expecteds[i], data: arr[i]})
+			check_int8(t, mVal{Name: expecteds[i], Value: arr[i]})
 		}
 	})
 }
 
-func check_int16(t *testing.T, p pair) {
+func check_int16(t *testing.T, p mVal) {
 	exp := int16(0)
 	_, err := fmt.Sscanf(p.Name, "%d", &exp)
 	if err != nil {
 		t.Fatal(err)
 	}
-	got := p.data.(int16)
+	got := p.Value.(int16)
 	if got != exp {
 		t.Fatal("expected:", exp, "got:", got)
 	}
 }
-func check_int16_array(t *testing.T, p pair) {
-	arr := p.data.([]int16)
+func check_int16_array(t *testing.T, p mVal) {
+	arr := p.Value.([]int16)
 	check_array(t, p, len(arr), func(expecteds []string) {
 		for i := range arr {
-			check_int16(t, pair{Name: expecteds[i], data: arr[i]})
+			check_int16(t, mVal{Name: expecteds[i], Value: arr[i]})
 		}
 	})
 }
 
-func check_int32(t *testing.T, p pair) {
+func check_int32(t *testing.T, p mVal) {
 	exp := int32(0)
 	_, err := fmt.Sscanf(p.Name, "%d", &exp)
 	if err != nil {
 		t.Fatal(err)
 	}
-	got := p.data.(int32)
+	got := p.Value.(int32)
 	if got != exp {
 		t.Fatal("expected:", exp, "got:", got)
 	}
 }
-func check_int32_array(t *testing.T, p pair) {
-	arr := p.data.([]int32)
+func check_int32_array(t *testing.T, p mVal) {
+	arr := p.Value.([]int32)
 	check_array(t, p, len(arr), func(expecteds []string) {
 		for i := range arr {
-			check_int32(t, pair{Name: expecteds[i], data: arr[i]})
+			check_int32(t, mVal{Name: expecteds[i], Value: arr[i]})
 		}
 	})
 }
 
-func check_int64(t *testing.T, p pair) {
+func check_int64(t *testing.T, p mVal) {
 	exp := int64(0)
 	_, err := fmt.Sscanf(p.Name, "%d", &exp)
 	if err != nil {
 		t.Fatal(err)
 	}
-	got := p.data.(int64)
+	got := p.Value.(int64)
 	if got != exp {
 		t.Fatal("expected:", exp, "got:", got)
 	}
 }
-func check_int64_array(t *testing.T, p pair) {
-	arr := p.data.([]int64)
+func check_int64_array(t *testing.T, p mVal) {
+	arr := p.Value.([]int64)
 	check_array(t, p, len(arr), func(expecteds []string) {
 		for i := range arr {
-			check_int64(t, pair{Name: expecteds[i], data: arr[i]})
+			check_int64(t, mVal{Name: expecteds[i], Value: arr[i]})
 		}
 	})
 }
 
-func check_uint8(t *testing.T, p pair) {
+func check_uint8(t *testing.T, p mVal) {
 	exp := uint8(0)
 	_, err := fmt.Sscanf(p.Name, "%d", &exp)
 	if err != nil {
 		t.Fatal(err)
 	}
-	got := p.data.(uint8)
+	got := p.Value.(uint8)
 	if got != exp {
 		t.Fatal("expected:", exp, "got:", got)
 	}
 }
-func check_uint8_array(t *testing.T, p pair) {
-	arr := p.data.([]uint8)
+func check_uint8_array(t *testing.T, p mVal) {
+	arr := p.Value.([]uint8)
 	check_array(t, p, len(arr), func(expecteds []string) {
 		for i := range arr {
-			check_uint8(t, pair{Name: expecteds[i], data: arr[i]})
+			check_uint8(t, mVal{Name: expecteds[i], Value: arr[i]})
 		}
 	})
 }
 
-func check_uint16(t *testing.T, p pair) {
+func check_uint16(t *testing.T, p mVal) {
 	exp := uint16(0)
 	_, err := fmt.Sscanf(p.Name, "%d", &exp)
 	if err != nil {
 		t.Fatal(err)
 	}
-	got := p.data.(uint16)
+	got := p.Value.(uint16)
 	if got != exp {
 		t.Fatal("expected:", exp, "got:", got)
 	}
 }
-func check_uint16_array(t *testing.T, p pair) {
-	arr := p.data.([]uint16)
+func check_uint16_array(t *testing.T, p mVal) {
+	arr := p.Value.([]uint16)
 	check_array(t, p, len(arr), func(expecteds []string) {
 		for i := range arr {
-			check_uint16(t, pair{Name: expecteds[i], data: arr[i]})
+			check_uint16(t, mVal{Name: expecteds[i], Value: arr[i]})
 		}
 	})
 }
 
-func check_uint32(t *testing.T, p pair) {
+func check_uint32(t *testing.T, p mVal) {
 	exp := uint32(0)
 	_, err := fmt.Sscanf(p.Name, "%d", &exp)
 	if err != nil {
 		t.Fatal(err)
 	}
-	got := p.data.(uint32)
+	got := p.Value.(uint32)
 	if got != exp {
 		t.Fatal("expected:", exp, "got:", got)
 	}
 }
-func check_uint32_array(t *testing.T, p pair) {
-	arr := p.data.([]uint32)
+func check_uint32_array(t *testing.T, p mVal) {
+	arr := p.Value.([]uint32)
 	check_array(t, p, len(arr), func(expecteds []string) {
 		for i := range arr {
-			check_uint32(t, pair{Name: expecteds[i], data: arr[i]})
+			check_uint32(t, mVal{Name: expecteds[i], Value: arr[i]})
 		}
 	})
 }
 
-func check_uint64(t *testing.T, p pair) {
+func check_uint64(t *testing.T, p mVal) {
 	exp := uint64(0)
 	_, err := fmt.Sscanf(p.Name, "%d", &exp)
 	if err != nil {
 		t.Fatal(err)
 	}
-	got := p.data.(uint64)
+	got := p.Value.(uint64)
 	if got != exp {
 		t.Fatal("expected:", exp, "got:", got)
 	}
 }
-func check_uint64_array(t *testing.T, p pair) {
-	arr := p.data.([]uint64)
+func check_uint64_array(t *testing.T, p mVal) {
+	arr := p.Value.([]uint64)
 	check_array(t, p, len(arr), func(expecteds []string) {
 		for i := range arr {
-			check_uint64(t, pair{Name: expecteds[i], data: arr[i]})
+			check_uint64(t, mVal{Name: expecteds[i], Value: arr[i]})
 		}
 	})
 }
 
-func check_nvlist(t *testing.T, p pair) {
-	list := p.data.(List)
-	for _, pair := range list.Pairs {
-		checkers[pair.Type](t, pair.pair)
+func check_nvlist(t *testing.T, p mVal) {
+	list := p.Value.(mList)
+	for _, pair := range list {
+		checkers[pair.Type](t, pair)
 	}
 }
-func check_nvlist_array(t *testing.T, p pair) {
-	arr := p.data.([]List)
+func check_nvlist_array(t *testing.T, p mVal) {
+	arr := p.Value.([]mList)
 	check_array(t, p, len(arr), func(expecteds []string) {
 		for i := range arr {
-			check_nvlist(t, pair{Name: expecteds[i], data: arr[i]})
+			check_nvlist(t, mVal{Name: expecteds[i], Value: arr[i]})
 		}
 	})
 }
 
-func check_string(t *testing.T, p pair) {
+func check_string(t *testing.T, p mVal) {
 	exp := p.Name
-	got := p.data.(string)
+	got := p.Value.(string)
 	if got != exp {
 		t.Fatal("expected:", exp, "got:", got)
 	}
 }
-func check_string_array(t *testing.T, p pair) {
-	arr := p.data.([]string)
+func check_string_array(t *testing.T, p mVal) {
+	arr := p.Value.([]string)
 	check_array(t, p, len(arr), func(expecteds []string) {
 		for i := range arr {
-			check_string(t, pair{Name: expecteds[i], data: arr[i]})
+			check_string(t, mVal{Name: expecteds[i], Value: arr[i]})
 		}
 	})
 }
 
-var checkers map[dataType]func(*testing.T, pair)
+var checkers map[dataType]func(*testing.T, mVal)
 
 func init() {
-	checkers = map[dataType]func(*testing.T, pair){
+	checkers = map[dataType]func(*testing.T, mVal){
 		BOOLEAN:       check_boolean,
 		BYTE:          check_byte,
 		INT16:         check_int16,
@@ -326,12 +328,12 @@ func TestDecodeGood(t *testing.T) {
 			t.Fatal(s.name, "failed:", err)
 		}
 
-		for _, p := range l.Pairs {
+		for _, p := range l {
 			fn, ok := checkers[p.Type]
 			if !ok {
 				t.Fatal(s.name, "unknown type:", p.Type)
 			}
-			fn(t, p.pair)
+			fn(t, p)
 		}
 	}
 }
