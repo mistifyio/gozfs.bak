@@ -8,7 +8,7 @@ import (
 	"os"
 	"strings"
 
-	"nv"
+	"gozfs/nv"
 )
 
 func printList(indent string, l nv.List) {

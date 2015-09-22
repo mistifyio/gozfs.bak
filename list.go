@@ -1,21 +1,29 @@
 package main
 
 import (
-	//"bufio"
 	"fmt"
 	"gozfs/nv"
-	"io/ioutil"
+	"io"
 	"os"
 	"strings"
+	"time"
 )
+
+func decodeAndPrintList(buf []byte) {
+	l, err := nv.Decode(buf)
+	if err != nil {
+		panic(err)
+	}
+	printList("", l)
+}
 
 func printList(indent string, l nv.List) {
 	for _, p := range l.Pairs {
 		if p.Type == nv.NVLIST {
-			fmt.Printf("%sName: %s, Type: %s\n", indent, p.Name, p.Type)
+			fmt.Fprintf(os.Stderr, "%sName: %s, Type: %s Size: %d\n", indent, p.Name, p.Type, p.EncodedSize)
 			printList(strings.Repeat(" ", len(indent)+2), p.Value.(nv.List))
 		} else {
-			fmt.Printf("%sName: %s, Type: %s, Value:%+v\n", indent, p.Name, p.Type, p.Value)
+			fmt.Fprintf(os.Stderr, "%sName: %s, Type: %s, Size: %d Value: %+v\n", indent, p.Name, p.Type, p.EncodedSize, p.Value)
 		}
 	}
 }
@@ -25,55 +33,28 @@ func list(name string) error {
 	if err != nil {
 		return err
 	}
+	go io.Copy(os.Stdout, reader)
 	defer reader.Close()
 	defer writer.Close()
 
-	opts := nv.List{
-		Pairs: []nv.Pair{
-			{Value: int(writer.Fd())},
+	var sargs = struct {
+		Command string `nv:"cmd"`
+		InNVL   struct {
+		} `nv:"innvl"`
+		Opts struct {
+			Fd int32 `nv:"fd"`
+		} `nv:"opts"`
+		Version uint64 `nv:"version"`
+	}{
+		Command: "zfs_list",
+		Opts: struct {
+			Fd int32 `nv:"fd"`
+		}{
+			Fd: int32(writer.Fd()),
 		},
 	}
-	opts.Pairs[0].EncodedSize = 0x1c
-	opts.Pairs[0].DecodedSize = 0x20
-	opts.Pairs[0].Name = "fd"
-	opts.Pairs[0].NElements = 1
-	opts.Pairs[0].Type = nv.INT32
-
-	innvl := nv.List{}
-
-	args := nv.List{
-		Pairs: []nv.Pair{
-			{Value: "zfs_list"},
-			{Value: innvl},
-			{Value: opts},
-			{Value: uint64(0)},
-		},
-	}
-	args.Pairs[0].EncodedSize = 0x24
-	args.Pairs[0].DecodedSize = 0x28
-	args.Pairs[0].Name = "cmd"
-	args.Pairs[0].NElements = 1
-	args.Pairs[0].Type = nv.STRING
-
-	args.Pairs[1].EncodedSize = 0x2c
-	args.Pairs[1].DecodedSize = 0x30
-	args.Pairs[1].Name = "innvl"
-	args.Pairs[1].NElements = 1
-	args.Pairs[1].Type = nv.NVLIST
-
-	args.Pairs[2].EncodedSize = 0x44
-	args.Pairs[2].DecodedSize = 0x30
-	args.Pairs[2].Name = "opts"
-	args.Pairs[2].NElements = 1
-	args.Pairs[2].Type = nv.NVLIST
-
-	args.Pairs[3].EncodedSize = 0x24
-	args.Pairs[3].DecodedSize = 0x20
-	args.Pairs[3].Name = "version"
-	args.Pairs[3].NElements = 1
-	args.Pairs[3].Type = nv.UINT64
-
-	bytes, err := nv.Encode(args)
+	fmt.Fprintln(os.Stderr, sargs)
+	sbytes, err := nv.Encode(sargs)
 	if err != nil {
 		panic(err)
 	}
@@ -85,23 +66,37 @@ func list(name string) error {
 		return nil
 	*/
 
-	fmt.Println("enter ioctl")
-	err = ioctl(zfs, name, bytes, nil)
-	fmt.Println("exit  ioctl")
+	/*
+		if !reflect.DeepEqual(lbytes, sbytes) {
+			want, got := diff(lbytes, sbytes)
+			fmt.Fprintf(os.Stderr, "want:|%s|\n\n got:|%s|\n", want, got)
+			fmt.Fprintln(os.Stderr, "want:")
+			decodeAndPrintList(lbytes)
+			fmt.Fprintln(os.Stderr, " got:")
+			decodeAndPrintList(sbytes)
+		}
+	*/
+
+	fmt.Fprintln(os.Stderr, "enter ioctl")
+	err = ioctl(zfs, name, sbytes, nil)
+	fmt.Fprintln(os.Stderr, "exit  ioctl")
 	if err != nil {
 		return err
 	}
 
-	fmt.Println("start reading")
-	buf, err := ioutil.ReadAll(reader)
-	fmt.Println("stop reading")
-	if err != nil {
-		return err
-	}
-	list, err := nv.Decode(buf)
-	if err != nil {
-		return err
-	}
-	printList("", list)
+	/*
+		fmt.Fprintln(os.Stderr, "start reading")
+		buf, err := ioutil.ReadAll(reader)
+		fmt.Fprintln(os.Stderr, "stop reading")
+		if err != nil {
+			return err
+		}
+		list, err := nv.Decode(buf)
+		if err != nil {
+			return err
+		}
+		printList("", list)
+	*/
+	time.Sleep(1 * time.Second)
 	return nil
 }

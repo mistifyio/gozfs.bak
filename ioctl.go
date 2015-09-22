@@ -38,6 +38,7 @@ package main
 import "C"
 import (
 	"errors"
+	"fmt"
 	"os"
 	"unsafe"
 )
@@ -57,5 +58,6 @@ func ioctl(f *os.File, name string, input, output []byte) error {
 		C.CString(name), C.int(len(name)),
 		unsafe.Pointer(in), C.int(len(input)),
 		unsafe.Pointer(out), C.int(len(output)))
+	fmt.Fprintln(os.Stderr, err)
 	return err
 }
