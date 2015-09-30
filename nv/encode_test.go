@@ -37,6 +37,15 @@ func diff(want, got []byte) (string, string) {
 			w[i] = reset + w[i]
 		}
 	}
+	if len(g) > min {
+		diff = true
+		g[min] = red + g[min]
+	}
+	if len(w) > min {
+		diff = true
+		w[min] = green + w[min]
+	}
+
 	if diff {
 		g[len(g)-1] += reset
 		w[len(w)-1] += reset

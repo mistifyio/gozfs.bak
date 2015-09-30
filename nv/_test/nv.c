@@ -78,10 +78,10 @@ char *strf(double d) {
 
 #define do_signed(lower, UPPER) do { \
 	l = fnvlist_alloc(); \
-	fnvlist_add_##lower(l, stri(UPPER##_MIN), UPPER##_MIN); \
-	fnvlist_add_##lower(l, stri(UPPER##_MIN+1), UPPER##_MIN+1); \
-	fnvlist_add_##lower(l, stri(UPPER##_MIN/2), UPPER##_MIN/2); \
 	fnvlist_add_##lower(l, "-1", -1); \
+	fnvlist_add_##lower(l, stri(UPPER##_MIN/2), UPPER##_MIN/2); \
+	fnvlist_add_##lower(l, stri(UPPER##_MIN+1), UPPER##_MIN+1); \
+	fnvlist_add_##lower(l, stri(UPPER##_MIN), UPPER##_MIN); \
 	fnvlist_add_##lower(l, "0", 0); \
 	fnvlist_add_##lower(l, "1", 1); \
 	fnvlist_add_##lower(l, stri(UPPER##_MAX/2), UPPER##_MAX/2); \
@@ -113,10 +113,10 @@ char *strf(double d) {
 	l = fnvlist_alloc(); \
 	size_t len = 5; \
 	lower##_t array[len]; \
-	arrset(array, len, UPPER##_MIN); fnvlist_add_##lower##_array(l, stra(stri(UPPER##_MIN), len), array, len); \
-	arrset(array, len, UPPER##_MIN+1); fnvlist_add_##lower##_array(l, stra(stri(UPPER##_MIN+1), len), array, len); \
-	arrset(array, len, UPPER##_MIN/2); fnvlist_add_##lower##_array(l, stra(stri(UPPER##_MIN/2), len), array, len); \
 	arrset(array, len, -1); fnvlist_add_##lower##_array(l, stra("-1", len), array, len); \
+	arrset(array, len, UPPER##_MIN/2); fnvlist_add_##lower##_array(l, stra(stri(UPPER##_MIN/2), len), array, len); \
+	arrset(array, len, UPPER##_MIN+1); fnvlist_add_##lower##_array(l, stra(stri(UPPER##_MIN+1), len), array, len); \
+	arrset(array, len, UPPER##_MIN); fnvlist_add_##lower##_array(l, stra(stri(UPPER##_MIN), len), array, len); \
 	arrset(array, len, 0); fnvlist_add_##lower##_array(l, stra("0", len), array, len); \
 	arrset(array, len, 1); fnvlist_add_##lower##_array(l, stra("1", len), array, len); \
 	arrset(array, len, UPPER##_MAX/2); fnvlist_add_##lower##_array(l, stra(stri(UPPER##_MAX/2), len), array,  len); \
@@ -147,14 +147,14 @@ char *strf(double d) {
 
 #endif
 int main() {
-	printf("package nv\n"
-	       "\n"
-	       "/* !!! GENERATED FILE DO NOT EDIT !!! */\n"
-	       "\n"
-	       "var good = []struct {\n"
-	       "\tname    string\n"
-	       "\tpayload []byte\n"
-	       "}{\n");
+	printf(	"package nv\n"
+		"\n"
+		"/* !!! GENERATED FILE DO NOT EDIT !!! */\n"
+		"\n"
+		"var good = []struct {\n"
+		"\tname    string\n"
+		"\tpayload []byte\n"
+		"}{\n");
 
 	nvlist_t *l = fnvlist_alloc();
 	fnvlist_add_boolean_value(l, "false", B_FALSE);
@@ -180,9 +180,9 @@ int main() {
 	}
 
 	l = fnvlist_alloc();
+	fnvlist_add_byte(l, "-128", -128);
 	fnvlist_add_byte(l, "0", 0);
 	fnvlist_add_byte(l, "1", 1);
-	fnvlist_add_byte(l, "-128", -128);
 	fnvlist_add_byte(l, "127", 127);
 	print(l, "bytes");
 	fnvlist_free(l);
@@ -191,9 +191,9 @@ int main() {
 		l = fnvlist_alloc();
 		size_t len = 5;
 		unsigned char array[len];
+		arrset(array, len, -128); fnvlist_add_byte_array(l, "-128,-128,-128,-128,-128", array, len);
 		arrset(array, len, 0); fnvlist_add_byte_array(l, "0,0,0,0,0", array, len);
 		arrset(array, len, 1); fnvlist_add_byte_array(l, "1,1,1,1,1", array, len);
-		arrset(array, len, -128); fnvlist_add_byte_array(l, "-128,-128,-128,-128,-128", array, len);
 		arrset(array, len, 127); fnvlist_add_byte_array(l, "127,127,127,127,127", array, len);
 		print(l, "byte array");
 		fnvlist_free(l);
@@ -265,10 +265,10 @@ int main() {
 
 	{
 		l = fnvlist_alloc();
-		fnvlist_add_double(l, strf(DBL_MIN), DBL_MIN);
+		fnvlist_add_double(l, "-1", -1);
 		fnvlist_add_double(l, strf(DBL_MIN+1), DBL_MIN+1);
 		fnvlist_add_double(l, strf(DBL_MIN/2), DBL_MIN/2);
-		fnvlist_add_double(l, "-1", -1);
+		fnvlist_add_double(l, strf(DBL_MIN), DBL_MIN);
 		fnvlist_add_double(l, "0", 0);
 		fnvlist_add_double(l, "1", 1);
 		fnvlist_add_double(l, strf(DBL_MAX/2), DBL_MAX/2);

@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"reflect"
+	"sort"
 	"strings"
 
 	xdr "github.com/davecgh/go-xdr/xdr2"
@@ -116,6 +117,10 @@ type Pair struct {
 	Value interface{}
 }
 
+func align4(n int) int {
+	return (n + 3) & ^3
+}
+
 func align8(n int) int {
 	return (n + 7) & ^7
 }
@@ -124,15 +129,17 @@ func (p pair) valSize() int {
 	size := 0
 	switch p.Type {
 	case BYTE, INT8, UINT8:
-		size = 1
+		size = 4
 	case INT16, UINT16:
-		size = 2
-	case INT32, UINT32:
+		size = 4
+	case BOOLEAN_VALUE, INT32, UINT32:
 		size = 4
 	case INT64, UINT64:
 		size = 8
-	case BYTE_ARRAY, BOOLEAN_ARRAY, INT8_ARRAY, UINT8_ARRAY:
+	case BYTE_ARRAY:
 		size = int(p.NElements * 1)
+	case INT8_ARRAY, UINT8_ARRAY:
+		size = 4 + int(p.NElements*1)
 	case INT16_ARRAY, UINT16_ARRAY:
 		size = int(p.NElements * 2)
 	case INT32_ARRAY, UINT32_ARRAY:
@@ -151,16 +158,23 @@ func (p pair) valSize() int {
 		// 	int32_t		nvl_pad;	/* currently not used, for alignment */
 		// } nvlist_t;
 		size = 4 + 4 + 8 + 4 + 4
+	case BOOLEAN_ARRAY:
+		size = 4 + int(p.NElements*4)
 	case STRING_ARRAY:
 		slice := p.data.([]string)
 		for i := range slice {
 			size += len(slice[i]) + 1
 		}
 	}
+	fmt.Println("valSize:", size)
 	return size
 }
 
-func (p pair) size() int {
+func (p pair) encodedSize() int {
+	return 4 + 4 + 4 + align4(len(p.Name)) + 4 + 4 + align4(p.valSize())
+}
+
+func (p pair) decodedSize() int {
 	fmt.Fprintln(os.Stderr, "value size:", p.valSize())
 	fmt.Fprintln(os.Stderr, "name size:", len(p.Name)+1)
 	// typedef struct nvpair {
@@ -173,7 +187,7 @@ func (p pair) size() int {
 	// 	/* aligned ptr array for string arrays */
 	// 	/* aligned array of data for value */
 	// } nvpair_t;
-	sizeof_nvpair_t := 4 + 2 + 4 + 4 + len(p.Name) + 1
+	sizeof_nvpair_t := 4 + 2 + 2 + 4 + 4 + len(p.Name) + 1
 	return align8(sizeof_nvpair_t) + align8(p.valSize())
 }
 
@@ -193,10 +207,6 @@ func Encode(i interface{}) ([]byte, error) {
 	if !v.IsValid() {
 		return nil, fmt.Errorf("type '%s' is invalid", v.Kind().String())
 	}
-	v = deref(v)
-	if v.Kind() != reflect.Struct {
-		return nil, fmt.Errorf("invalid type '%s', must be a struct", v.Kind().String())
-	}
 
 	buff := bytes.NewBuffer(nil)
 
@@ -205,136 +215,42 @@ func Encode(i interface{}) ([]byte, error) {
 		return nil, err
 	}
 
-	if v.Type().String() == "nv.List" {
-		if err = encodeList(v, buff); err != nil {
-			return nil, err
-		}
-	} else {
-		if _, err = encode(v, buff); err != nil {
-			return nil, err
-		}
+	if err = binary.Write(buff, binary.BigEndian, header{Flag: UNIQUE_NAME}); err != nil {
+		return nil, err
 	}
 
+	v = deref(v)
+	switch v.Kind() {
+	case reflect.Struct:
+		_, err = encodeStruct(v, buff)
+	case reflect.Map:
+		keys := make([]string, len(v.MapKeys()))
+		for i, k := range v.MapKeys() {
+			keys[i] = k.Interface().(string)
+		}
+		sort.Strings(keys)
+		fmt.Println("keys:", keys)
+
+		for _, k := range keys {
+			fmt.Printf("Encode: k: %v, v: %#v\n", k, v.MapIndex(reflect.ValueOf(k)))
+			_, err = encode(buff, k, v.MapIndex(reflect.ValueOf(k)))
+			if err != nil {
+				break
+			}
+		}
+		err = binary.Write(buff, binary.BigEndian, uint64(0))
+	default:
+		return nil, fmt.Errorf("invalid type '%s', must be a struct", v.Kind().String())
+	}
+
+	if err != nil {
+		return nil, err
+	}
 	return buff.Bytes(), nil
 }
 
-func encodeList(v reflect.Value, w io.Writer) error {
-	if !v.IsValid() {
-		return errors.New("v is invalid")
-	}
-
-	if v.Type().String() != "nv.List" {
-		return fmt.Errorf("invalid type '%s' expected 'nv.List'", v.Type().String())
-	}
-	pairs := v.FieldByName("Pairs")
-	numPairs := pairs.Len()
-
+func encodeStruct(v reflect.Value, w io.Writer) (int, error) {
 	var err error
-	if err = binary.Write(w, binary.BigEndian, header{Flag: UNIQUE_NAME}); err != nil {
-		return err
-	}
-
-	enc := xdr.NewEncoder(w)
-	for i := 0; i < numPairs; i++ {
-		p := pairs.Index(i)
-		pp := p.Interface().(Pair)
-		pp.NElements = 1
-
-		if pp.Type == UNKNOWN || pp.Type > DOUBLE {
-			return fmt.Errorf("invalid Type '%v'", pp.Type)
-		}
-		switch pp.Type {
-		case BYTE:
-			pp.Value = int8(pp.Value.(uint8))
-		case UINT8:
-			pp.Value = int(int8(pp.Value.(uint8)))
-		case BYTE_ARRAY:
-			pp.NElements = uint32(len(pp.Value.([]byte)))
-			n := int(pp.NElements)
-			arrType := reflect.ArrayOf(n, reflect.TypeOf(byte(0)))
-			arr := reflect.New(arrType).Elem()
-			for i, b := range pp.Value.([]byte) {
-				arr.Index(i).SetUint(uint64(b))
-			}
-			pp.Value = arr.Interface()
-		case BOOLEAN_ARRAY:
-			pp.NElements = uint32(len(pp.Value.([]bool)))
-		case INT8_ARRAY:
-			pp.NElements = uint32(len(pp.Value.([]int8)))
-		case INT16_ARRAY:
-			pp.NElements = uint32(len(pp.Value.([]int16)))
-		case INT32_ARRAY:
-			pp.NElements = uint32(len(pp.Value.([]int32)))
-		case INT64_ARRAY:
-			pp.NElements = uint32(len(pp.Value.([]int64)))
-		case UINT8_ARRAY:
-			// this one is weird since UINT8s are encoded as char
-			// aka int32s... :(
-			pp.NElements = uint32(len(pp.Value.([]uint8)))
-			n := int(pp.NElements)
-			sliceType := reflect.SliceOf(reflect.TypeOf(int32(0)))
-			slice := reflect.MakeSlice(sliceType, n, n)
-			for i, b := range pp.Value.([]uint8) {
-				slice.Index(i).SetInt(int64(int8(b)))
-			}
-			pp.Value = slice.Interface()
-		case UINT16_ARRAY:
-			pp.NElements = uint32(len(pp.Value.([]uint16)))
-		case UINT32_ARRAY:
-			pp.NElements = uint32(len(pp.Value.([]uint32)))
-		case UINT64_ARRAY:
-			pp.NElements = uint32(len(pp.Value.([]uint64)))
-		case STRING_ARRAY:
-			pp.NElements = uint32(len(pp.Value.([]string)))
-			arrType := reflect.ArrayOf(int(pp.NElements), reflect.TypeOf(""))
-			arr := reflect.New(arrType).Elem()
-			for i, b := range pp.Value.([]string) {
-				arr.Index(i).SetString(b)
-			}
-			pp.Value = arr.Interface()
-		case NVLIST:
-			if _, err = enc.Encode(pp.pair); err != nil {
-				return err
-			}
-			if err = encodeList(reflect.ValueOf(pp.Value), w); err != nil {
-				return err
-			}
-			continue
-		case NVLIST_ARRAY:
-			pp.NElements = uint32(len(pp.Value.([]List)))
-			if _, err = enc.Encode(pp.pair); err != nil {
-				return err
-			}
-			if pp.NElements == 0 {
-				return fmt.Errorf("empty NVLIST_ARRAY")
-			}
-			for _, l := range pp.Value.([]List) {
-				if err = encodeList(reflect.ValueOf(l), w); err != nil {
-					return err
-				}
-			}
-			continue
-		}
-
-		_, err = enc.Encode(pp)
-		if err != nil {
-			return err
-		}
-	}
-
-	return binary.Write(w, binary.BigEndian, uint64(0))
-}
-
-func encode(v reflect.Value, w io.Writer) (int, error) {
-	if !v.IsValid() {
-		return 0, errors.New("v is invalid")
-	}
-
-	var err error
-	if err = binary.Write(w, binary.BigEndian, header{Flag: UNIQUE_NAME}); err != nil {
-		return 0, err
-	}
-
 	size := 0
 	numFields := v.NumField()
 	fmt.Fprintf(os.Stderr, "v:%+v\n", v.Interface())
@@ -351,138 +267,163 @@ func encode(v reflect.Value, w io.Writer) (int, error) {
 				name = tags[0]
 			}
 		}
-		p := pair{
-			Name:      name,
-			NElements: 1,
-			data:      field.Interface(),
-		}
-		value := p.data
-		size := 0
-		fmt.Fprintf(os.Stderr, "name, value: %v, %v\n", name, value)
-		switch t := field.Kind(); t {
-		case reflect.String:
-			p.Type = STRING
-		case reflect.Uint64:
-			p.Type = UINT64
-		case reflect.Int32:
-			p.Type = INT32
-		case reflect.Struct:
-			p.Type = NVLIST
-			size = 24
-		default:
-			panic(fmt.Sprint("unknown type:", t))
-		}
 
-		if p.Type == UNKNOWN || p.Type > DOUBLE {
-			return 0, fmt.Errorf("invalid Type '%v'", field.Kind())
-		}
-
-		vbuf := &bytes.Buffer{}
-		fmt.Fprintln(os.Stderr, "p.Type:", p.Type)
-		switch p.Type {
-		case BYTE:
-			value = int8(value.(uint8))
-		case UINT8:
-			value = int(int8(value.(uint8)))
-		case BYTE_ARRAY:
-			p.NElements = uint32(len(value.([]byte)))
-			n := int(p.NElements)
-			arrType := reflect.ArrayOf(n, reflect.TypeOf(byte(0)))
-			arr := reflect.New(arrType).Elem()
-			for i, b := range value.([]byte) {
-				arr.Index(i).SetUint(uint64(b))
-			}
-			value = arr.Interface()
-		case BOOLEAN_ARRAY:
-			p.NElements = uint32(len(value.([]bool)))
-		case INT8_ARRAY:
-			p.NElements = uint32(len(value.([]int8)))
-		case INT16_ARRAY:
-			p.NElements = uint32(len(value.([]int16)))
-		case INT32_ARRAY:
-			p.NElements = uint32(len(value.([]int32)))
-		case INT64_ARRAY:
-			p.NElements = uint32(len(value.([]int64)))
-		case UINT8_ARRAY:
-			// this one is weird since UINT8s are encoded as char
-			// aka int32s... :(
-			p.NElements = uint32(len(value.([]uint8)))
-			n := int(p.NElements)
-			sliceType := reflect.SliceOf(reflect.TypeOf(int32(0)))
-			slice := reflect.MakeSlice(sliceType, n, n)
-			for i, b := range value.([]uint8) {
-				slice.Index(i).SetInt(int64(int8(b)))
-			}
-			value = slice.Interface()
-		case UINT16_ARRAY:
-			p.NElements = uint32(len(value.([]uint16)))
-		case UINT32_ARRAY:
-			p.NElements = uint32(len(value.([]uint32)))
-		case UINT64_ARRAY:
-			p.NElements = uint32(len(value.([]uint64)))
-		case STRING_ARRAY:
-			p.NElements = uint32(len(value.([]string)))
-			arrType := reflect.ArrayOf(int(p.NElements), reflect.TypeOf(""))
-			arr := reflect.New(arrType).Elem()
-			for i, b := range value.([]string) {
-				arr.Index(i).SetString(b)
-			}
-			value = arr.Interface()
-		case NVLIST:
-			fmt.Fprintln(os.Stderr)
-			fmt.Fprintln(os.Stderr, "::: recursing :::")
-			if _, err := encode(reflect.ValueOf(value), vbuf); err != nil {
-				fmt.Fprintln(os.Stderr, "error")
-				return 0, err
-			}
-			fmt.Fprintln(os.Stderr, "::: finished  :::")
-			fmt.Fprintln(os.Stderr)
-		case NVLIST_ARRAY:
-			p.NElements = uint32(len(value.([]List)))
-			buf := &bytes.Buffer{}
-			for _, l := range value.([]List) {
-				if err = encodeList(reflect.ValueOf(l), buf); err != nil {
-					return 0, err
-				}
-			}
-		}
-
-		//fmt.Fprintln(os.Stderr, "vbuf before:", vbuf.Bytes())
-		if vbuf.Len() == 0 {
-			_, err = xdr.NewEncoder(vbuf).Encode(value)
-			if err != nil {
-				return 0, err
-			}
-			size = vbuf.Len()
-		}
-
-		//fmt.Fprintln(os.Stderr, "vbuf after:", vbuf.Bytes())
-		psize := p.size()
-		p.DecodedSize = uint32(psize)
-		fmt.Fprintln(os.Stderr, "p.size:", psize)
-		fmt.Fprintln(os.Stderr, "vbuf.Len():", vbuf.Len(), "vbuf:", vbuf.Bytes())
-
-		pbuf := &bytes.Buffer{}
-		_, err = xdr.NewEncoder(pbuf).Encode(p)
-		if err != nil {
-			return 0, err
-		}
-		_, err := pbuf.WriteTo(w)
-		if err != nil {
-			return 0, err
-		}
-		_, err = vbuf.WriteTo(w)
-		if err != nil {
-			return 0, err
-		}
-		size += pbuf.Len() + vbuf.Len()
-		fmt.Fprintln(os.Stderr)
+		encode(w, name, field)
 	}
 
 	if err = binary.Write(w, binary.BigEndian, uint64(0)); err != nil {
 		return 0, err
 	}
 	return size + 8, nil
+}
+
+func encode(w io.Writer, name string, field reflect.Value) ([]byte, error) {
+	var err error
+	p := pair{
+		Name:      name,
+		NElements: 1,
+		data:      field.Interface(),
+	}
+	value := p.data
+	size := 0
+
+	fmt.Fprintf(os.Stderr, "encode: name, value: %v, %v\n", name, value)
+
+	switch t := field.Kind(); t {
+	case reflect.String:
+		p.Type = STRING
+	case reflect.Uint64:
+		p.Type = UINT64
+	case reflect.Int32:
+		p.Type = INT32
+	case reflect.Struct:
+		p.Type = NVLIST
+		size = 24
+	default:
+		panic(fmt.Sprint("unknown type:", t))
+	}
+
+	if field.Type().String() == "nv.mVal" {
+		p.Type = field.FieldByName("Type").Interface().(dataType)
+		p.Name = field.FieldByName("Name").Interface().(string)
+		p.data = field.FieldByName("Value").Interface()
+		value = p.data
+	}
+
+	if p.Type == UNKNOWN || p.Type > DOUBLE {
+		return nil, fmt.Errorf("invalid Type '%v'", field.Kind())
+	}
+
+	vbuf := &bytes.Buffer{}
+	fmt.Fprintln(os.Stderr, "encode: p.Type:", p.Type)
+	switch p.Type {
+	case BYTE:
+		value = int8(value.(uint8))
+	case UINT8:
+		value = int(int8(value.(uint8)))
+	case BYTE_ARRAY:
+		p.NElements = uint32(len(value.([]byte)))
+		n := int(p.NElements)
+		arrType := reflect.ArrayOf(n, reflect.TypeOf(byte(0)))
+		arr := reflect.New(arrType).Elem()
+		for i, b := range value.([]byte) {
+			arr.Index(i).SetUint(uint64(b))
+		}
+		value = arr.Interface()
+	case BOOLEAN_ARRAY:
+		p.NElements = uint32(len(value.([]bool)))
+	case INT8_ARRAY:
+		p.NElements = uint32(len(value.([]int8)))
+	case INT16_ARRAY:
+		p.NElements = uint32(len(value.([]int16)))
+	case INT32_ARRAY:
+		p.NElements = uint32(len(value.([]int32)))
+	case INT64_ARRAY:
+		p.NElements = uint32(len(value.([]int64)))
+	case UINT8_ARRAY:
+		// this one is weird since UINT8s are encoded as char
+		// aka int32s... :(
+		p.NElements = uint32(len(value.([]uint8)))
+		n := int(p.NElements)
+		sliceType := reflect.SliceOf(reflect.TypeOf(int32(0)))
+		slice := reflect.MakeSlice(sliceType, n, n)
+		for i, b := range value.([]uint8) {
+			slice.Index(i).SetInt(int64(int8(b)))
+		}
+		value = slice.Interface()
+	case UINT16_ARRAY:
+		p.NElements = uint32(len(value.([]uint16)))
+	case UINT32_ARRAY:
+		p.NElements = uint32(len(value.([]uint32)))
+	case UINT64_ARRAY:
+		p.NElements = uint32(len(value.([]uint64)))
+	case STRING_ARRAY:
+		p.NElements = uint32(len(value.([]string)))
+		arrType := reflect.ArrayOf(int(p.NElements), reflect.TypeOf(""))
+		arr := reflect.New(arrType).Elem()
+		for i, b := range value.([]string) {
+			arr.Index(i).SetString(b)
+		}
+		value = arr.Interface()
+	case NVLIST:
+		fmt.Fprintln(os.Stderr)
+		fmt.Fprintln(os.Stderr, "::: recursing :::")
+		if _, err := encodeStruct(reflect.ValueOf(value), vbuf); err != nil {
+			fmt.Fprintln(os.Stderr, "error")
+			return nil, err
+		}
+		fmt.Fprintln(os.Stderr, "::: finished  :::")
+		fmt.Fprintln(os.Stderr)
+	case NVLIST_ARRAY:
+		p.NElements = uint32(len(value.([]List)))
+		/*
+			buf := &bytes.Buffer{}
+			for _, l := range value.([]List) {
+					if err = encode(reflect.ValueOf(l), buf); err != nil {
+						return 0, err
+					}
+			}
+		*/
+	}
+
+	//fmt.Fprintln(os.Stderr, "vbuf before:", vbuf.Bytes())
+	if vbuf.Len() == 0 {
+		_, err = xdr.NewEncoder(vbuf).Encode(value)
+		if err != nil {
+			return nil, err
+		}
+		size = vbuf.Len()
+	}
+
+	psize := p.decodedSize()
+	p.DecodedSize = uint32(psize)
+	p.EncodedSize = uint32(p.encodedSize())
+	fmt.Fprintln(os.Stderr, "p.size:", psize)
+	fmt.Fprintln(os.Stderr, "vbuf.Len():", vbuf.Len(), "vbuf:", vbuf.Bytes())
+
+	esize := vbuf.Len()
+	pbuf := &bytes.Buffer{}
+	_, err = xdr.NewEncoder(pbuf).Encode(p)
+	if err != nil {
+		return nil, err
+	}
+
+	esize += pbuf.Len()
+	_, err = pbuf.WriteTo(w)
+	if err != nil {
+		return nil, err
+	}
+	_, err = vbuf.WriteTo(w)
+	if err != nil {
+		return nil, err
+	}
+	size += pbuf.Len() + vbuf.Len()
+	fmt.Println("encoded size:", esize)
+	fmt.Println("encoded size?:", p.encodedSize())
+	fmt.Println("decoded size:", p.decodedSize())
+	fmt.Fprintln(os.Stderr)
+
+	return nil, nil
 }
 
 type mVal struct {
