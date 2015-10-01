@@ -207,13 +207,19 @@ int main() {
 		"\tpayload []byte\n"
 		"}{\n");
 
-	nvlist_t *l = fnvlist_alloc();
-	fnvlist_add_boolean_value(l, "false", B_FALSE);
-	fnvlist_add_boolean_value(l, "true", B_TRUE);
-	print(l, "bools");
-	fnvlist_free(l);
-
-
+	nvlist_t *l = NULL;
+	{
+		l = fnvlist_alloc();
+		print(l, "empty");
+		fnvlist_free(l);
+	}
+	{
+		l = fnvlist_alloc();
+		fnvlist_add_boolean_value(l, "false", B_FALSE);
+		fnvlist_add_boolean_value(l, "true", B_TRUE);
+		print(l, "bools");
+		fnvlist_free(l);
+	}
 	{
 		l = fnvlist_alloc();
 		size_t len = 5;
