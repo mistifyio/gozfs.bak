@@ -272,7 +272,7 @@ func encode(w io.Writer, v reflect.Value) error {
 			fmt.Printf("Encode: k: %v, v: %#v\n", k, v.MapIndex(reflect.ValueOf(k)))
 			_, err = encodeItem(w, k, v.MapIndex(reflect.ValueOf(k)))
 			if err != nil {
-				break
+				return err
 			}
 		}
 		err = binary.Write(w, binary.BigEndian, uint64(0))
@@ -312,44 +312,47 @@ func encodeStruct(v reflect.Value, w io.Writer) (int, error) {
 }
 
 func encodeItem(w io.Writer, name string, field reflect.Value) ([]byte, error) {
-	var err error
-	fmt.Println("name:", name, field.CanAddr())
-	if !field.CanAddr() {
-		return nil, nil
-	}
+	fmt.Fprintf(os.Stderr, "encodeItem: field: %#v\n", field)
+	fmt.Println("encodeItem: name:", name, "CanSet:", field.CanSet())
+
 	p := pair{
 		Name:      name,
 		NElements: 1,
-		data:      field.Interface(),
 	}
-	value := p.data
-	size := 0
-
-	fmt.Fprintf(os.Stderr, "encode: name, value: %v, %v\n", name, value)
 
 	switch t := field.Kind(); t {
 	case reflect.String:
 		p.Type = STRING
 	case reflect.Uint64:
 		p.Type = UINT64
-	case reflect.Int32:
+	case reflect.Int32, reflect.Int:
 		p.Type = INT32
 	case reflect.Struct:
 		p.Type = NVLIST
-		size = 24
 	default:
 		panic(fmt.Sprint("unknown type:", t))
 	}
 
+	fmt.Println("encodeItem: field.Type().String():", field.Type().String())
 	if field.Type().String() == "nv.mVal" {
 		p.Type = field.FieldByName("Type").Interface().(dataType)
 		p.Name = field.FieldByName("Name").Interface().(string)
 		p.data = field.FieldByName("Value").Interface()
-		value = p.data
+	} else {
+		fmt.Println("name:", name, "CanAddr:", field.CanAddr())
+		if !field.CanSet() {
+			panic("can't Set")
+			return nil, nil
+		}
+		p.data = field.Interface()
 	}
+	value := p.data
+	fmt.Fprintf(os.Stderr, "encode: name: %#v, p: %#v, value: %v\n", name, p, value)
+	fmt.Fprintln(os.Stderr, "p.UNKNOWN:", int(UNKNOWN))
 
 	if p.Type == UNKNOWN || p.Type > DOUBLE {
-		return nil, fmt.Errorf("invalid Type '%v'", field.Kind())
+		fmt.Println("returning error")
+		return nil, fmt.Errorf("invalid Type '%v'", p.Type)
 	}
 
 	vbuf := &bytes.Buffer{}
@@ -417,7 +420,7 @@ func encodeItem(w io.Writer, name string, field reflect.Value) ([]byte, error) {
 	case NVLIST_ARRAY:
 		p.NElements = uint32(len(value.([]mList)))
 		for _, l := range value.([]mList) {
-			if err = encode(vbuf, reflect.ValueOf(l)); err != nil {
+			if err := encode(vbuf, reflect.ValueOf(l)); err != nil {
 				fmt.Fprintln(os.Stderr, "error")
 				return nil, err
 			}
@@ -427,11 +430,10 @@ func encodeItem(w io.Writer, name string, field reflect.Value) ([]byte, error) {
 
 	//fmt.Fprintln(os.Stderr, "vbuf before:", vbuf.Bytes())
 	if vbuf.Len() == 0 {
-		_, err = xdr.NewEncoder(vbuf).Encode(value)
+		_, err := xdr.NewEncoder(vbuf).Encode(value)
 		if err != nil {
 			return nil, err
 		}
-		size = vbuf.Len()
 	}
 
 	psize := p.decodedSize()
@@ -441,7 +443,7 @@ func encodeItem(w io.Writer, name string, field reflect.Value) ([]byte, error) {
 	fmt.Fprintln(os.Stderr, "vbuf.Len():", vbuf.Len(), "vbuf:", vbuf.Bytes())
 
 	pbuf := &bytes.Buffer{}
-	_, err = xdr.NewEncoder(pbuf).Encode(p)
+	_, err := xdr.NewEncoder(pbuf).Encode(p)
 	if err != nil {
 		return nil, err
 	}
@@ -454,7 +456,6 @@ func encodeItem(w io.Writer, name string, field reflect.Value) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	size += pbuf.Len() + vbuf.Len()
 	fmt.Println("encoded size?:", p.encodedSize())
 	fmt.Println("decoded size:", p.decodedSize())
 	fmt.Fprintln(os.Stderr)

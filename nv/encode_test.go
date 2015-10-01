@@ -77,9 +77,11 @@ func TestEncodeGood(t *testing.T) {
 
 func TestEncodeBad(t *testing.T) {
 	for _, s := range encode_bad {
-		_, err := Encode(s.payload)
+		fmt.Println("=========")
+		fmt.Println("testing:", s.err)
+		p, err := Encode(s.payload)
 		if err == nil {
-			t.Fatalf("expected an error, wanted:|%s|, for payload: |%v|\n", s.err, s.payload)
+			t.Fatalf("expected an error, wanted:|%s|, for payload: |%v|, buf:|%v|\n", s.err, s.payload, p)
 		}
 		if s.err != err.Error() {
 			t.Fatalf("error mismatch, want:|%s|, got:|%s|, payload:|%v|\n",

@@ -237,6 +237,8 @@ func check_uint32_array(t *testing.T, p mVal) {
 
 func check_uint64(t *testing.T, p mVal) {
 	exp := uint64(0)
+	fmt.Printf("p:%#v\n", p.Name)
+	fmt.Println("p.Name:", p.Name)
 	_, err := fmt.Sscanf(p.Name, "%d", &exp)
 	if err != nil {
 		t.Fatal(err)
@@ -340,6 +342,7 @@ func TestDecodeGood(t *testing.T) {
 
 func TestDecodeBad(t *testing.T) {
 	for _, s := range decode_bad {
+		fmt.Println("testing:", s.err)
 		_, err := Decode(s.payload)
 		if err == nil {
 			t.Fatalf("expected an error, wanted:|%s|, for payload: |%v|\n", s.err, s.payload)
