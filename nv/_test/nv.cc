@@ -101,9 +101,9 @@ char *strf(double d) {
 	std::map<std::string, lower##_t> map; \
 	map["0"] = 0; \
 	map["1"] = 1; \
-	map[stri(UPPER##_MAX/2)] = UPPER##_MAX/2; \
-	map[stri(UPPER##_MAX-1)] = UPPER##_MAX-1; \
-	map[stri(UPPER##_MAX)] = UPPER##_MAX; \
+	map[stru(UPPER##_MAX/2)] = UPPER##_MAX/2; \
+	map[stru(UPPER##_MAX-1)] = UPPER##_MAX-1; \
+	map[stru(UPPER##_MAX)] = UPPER##_MAX; \
 	l = fnvlist_alloc(); \
 	for (auto &kv : map) { \
 		fnvlist_add_##lower(l, kv.first.c_str(), kv.second); \
@@ -180,11 +180,11 @@ char *strf(double d) {
 	typedef std::array<lower##_t, len> array; \
 	array arr; \
 	std::map<std::string, array> map; \
-	arr.fill(0); map[stra(stri(0), arr.size())] = arr; \
-	arr.fill(1); map[stra(stri(1), arr.size())] = arr; \
-	arr.fill(UPPER##_MAX/2); map[stra(stri(UPPER##_MAX/2), arr.size())] = arr; \
-	arr.fill(UPPER##_MAX-1); map[stra(stri(UPPER##_MAX-1), arr.size())] = arr; \
-	arr.fill(UPPER##_MAX); map[stra(stri(UPPER##_MAX), arr.size())] = arr; \
+	arr.fill(0); map[stra(stru(0), arr.size())] = arr; \
+	arr.fill(1); map[stra(stru(1), arr.size())] = arr; \
+	arr.fill(UPPER##_MAX/2); map[stra(stru(UPPER##_MAX/2), arr.size())] = arr; \
+	arr.fill(UPPER##_MAX-1); map[stra(stru(UPPER##_MAX-1), arr.size())] = arr; \
+	arr.fill(UPPER##_MAX); map[stra(stru(UPPER##_MAX), arr.size())] = arr; \
 	l = fnvlist_alloc(); \
 	for (auto &kv : map) { \
 		for (auto &n : kv.second) { \
