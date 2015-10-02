@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"reflect"
+	"runtime"
 	"sort"
 	"strings"
 
@@ -125,6 +126,10 @@ func align8(n int) int {
 	return (n + 7) & ^7
 }
 
+func (p pair) headerSize() int {
+	return 4 + 4 + 4 + align4(len(p.Name)) + 4 + 4
+}
+
 func (p pair) encodedSize() int {
 	valSize := 0
 	switch p.Type {
@@ -148,7 +153,7 @@ func (p pair) encodedSize() int {
 			valSize += align4(4 + len(slice[i]) + 1)
 		}
 	}
-	return 4 + 4 + 4 + align4(len(p.Name)) + 4 + 4 + align4(valSize)
+	return p.headerSize() + align4(valSize)
 }
 
 func (p pair) decodedSize() int {
@@ -621,4 +626,410 @@ func decodeList(r io.ReadSeeker) (mList, error) {
 
 	}
 	return m, nil
+}
+
+func DecodeStruct(data []byte, target interface{}) (err error) {
+	// Catch any panics from reflection
+	defer func() {
+		if r := recover(); r != nil {
+			if _, ok := r.(runtime.Error); ok {
+				panic(r)
+			}
+			if rs, ok := r.(string); ok {
+				err = errors.New(rs)
+			} else {
+				err = r.(error)
+			}
+		}
+	}()
+
+	b := bytes.NewReader(data)
+
+	// Validate data encoding
+	enc := encoding{}
+	if err := binary.Read(b, binary.BigEndian, &enc); err != nil {
+		return err
+	}
+	if enc.Encoding > 1 {
+		return fmt.Errorf("invalid encoding: %v", enc.Encoding)
+	}
+	if enc.Endianess > 1 {
+		return fmt.Errorf("invalid endianess: %v", enc.Endianess)
+	}
+	if enc.Reserved1 != 0 {
+		return fmt.Errorf("unexpected reserved1 value: %v", enc.Reserved1)
+	}
+	if enc.Reserved2 != 0 {
+		return fmt.Errorf("unexpected reserved2 value: %v", enc.Reserved2)
+	}
+
+	// Validate target
+	targetV := reflect.ValueOf(target)
+	if targetV.Kind() != reflect.Ptr {
+		return fmt.Errorf("cannot decode into non-pointer: %v", reflect.TypeOf(targetV).String())
+	}
+	if targetV.IsNil() {
+		return fmt.Errorf("cannot decode into nil")
+	}
+
+	return decodeListStruct(b, reflect.Indirect(targetV))
+}
+
+func decodeListStruct(r io.ReadSeeker, target reflect.Value) error {
+	// Validate data header
+	var h header
+	if err := binary.Read(r, binary.BigEndian, &h); err != nil {
+		return err
+	}
+	if h.Version != 0 {
+		return fmt.Errorf("unexpected version: %v", h.Version)
+	}
+	if h.Flag < UNIQUE_NAME || h.Flag > UNIQUE_NAME_TYPE {
+		return fmt.Errorf("unexpected Flag: %v", h.Flag)
+	}
+
+	// Make sure the target is not a pointer. If it is, initilize and
+	// dereference.
+	if target.Kind() == reflect.Ptr {
+		target.Set(reflect.New(target.Type().Elem()))
+		target = reflect.Indirect(target)
+	}
+
+	// Maps and structs have slightly different handling
+	isMap := (target.Kind() == reflect.Map)
+
+	if isMap {
+		// Initialize the map. Can't add keys without this.
+		target.Set(reflect.MakeMap(target.Type()))
+	}
+
+	// For structs, create the lookup table for field name/tag -> field index
+	var targetFieldIndexMap map[string]int
+	if !isMap {
+		targetFieldIndexMap = fieldIndexMap(target)
+	}
+
+	// Start decoding data
+	for {
+		// Done when there's no more data or an error has occured
+		if end, err := isEnd(r); end || err != nil {
+			return err
+		}
+
+		// Get next encoded data pair
+		// Note: This just gets the data pair metadata. The actual value data
+		// is left on the reader, to be pulled off by the decoder.
+		dataPair := pair{}
+		if _, err := xdr.Unmarshal(r, &dataPair); err != nil {
+			return err
+		}
+
+		var targetMapKey reflect.Value
+		if isMap {
+			// Map keys are set with reflect.Values rather than strings
+			targetMapKey = reflect.ValueOf(dataPair.Name)
+		}
+
+		// If not dealing with a map, look up the corresponding struct field
+		var targetField reflect.Value
+		if !isMap {
+			targetFieldIndex, ok := targetFieldIndexMap[dataPair.Name]
+			// If there's no corresponding struct field, skip the data and move
+			// on to the next data pair
+			if !ok {
+				r.Seek(int64(dataPair.EncodedSize-uint32(dataPair.headerSize())), 1)
+				continue
+			} else {
+				targetField = target.Field(targetFieldIndex)
+			}
+		}
+
+		var err error
+		dec := newDecoder(r)
+		switch dataPair.Type {
+		case BOOLEAN_VALUE:
+			v, err := dec.DecodeBool()
+			if err == nil {
+				if isMap {
+					target.SetMapIndex(targetMapKey, reflect.ValueOf(v))
+				} else {
+					targetField.SetBool(v)
+				}
+			}
+		case BYTE:
+			v, err := dec.DecodeByte()
+			if err == nil {
+				if isMap {
+					target.SetMapIndex(targetMapKey, reflect.ValueOf(v))
+				} else {
+					targetField.SetUint(uint64(v))
+				}
+			}
+		case INT8:
+			v, err := dec.DecodeInt8()
+			if err == nil {
+				if isMap {
+					target.SetMapIndex(targetMapKey, reflect.ValueOf(v))
+				} else {
+					targetField.SetInt(int64(v))
+				}
+			}
+		case INT16:
+			v, err := dec.DecodeInt16()
+			if err == nil {
+				if isMap {
+					target.SetMapIndex(targetMapKey, reflect.ValueOf(v))
+				} else {
+					targetField.SetInt(int64(v))
+				}
+			}
+		case INT32:
+			v, err := dec.DecodeInt32()
+			if err == nil {
+				if isMap {
+					target.SetMapIndex(targetMapKey, reflect.ValueOf(v))
+				} else {
+					targetField.SetInt(int64(v))
+				}
+			}
+		case INT64:
+			v, err := dec.DecodeInt64()
+			if err == nil {
+				if isMap {
+					target.SetMapIndex(targetMapKey, reflect.ValueOf(v))
+				} else {
+					targetField.SetInt(v)
+				}
+			}
+		case UINT8:
+			v, err := dec.DecodeUint8()
+			if err == nil {
+				if isMap {
+					target.SetMapIndex(targetMapKey, reflect.ValueOf(v))
+				} else {
+					targetField.SetUint(uint64(v))
+				}
+			}
+		case UINT16:
+			v, err := dec.DecodeUint16()
+			if err == nil {
+				if isMap {
+					target.SetMapIndex(targetMapKey, reflect.ValueOf(v))
+				} else {
+					targetField.SetUint(uint64(v))
+				}
+			}
+		case UINT32:
+			v, err := dec.DecodeUint32()
+			if err == nil {
+				if isMap {
+					target.SetMapIndex(targetMapKey, reflect.ValueOf(v))
+				} else {
+					targetField.SetUint(uint64(v))
+				}
+			}
+		case UINT64:
+			v, err := dec.DecodeUint64()
+			if err == nil {
+				if isMap {
+					target.SetMapIndex(targetMapKey, reflect.ValueOf(v))
+				} else {
+					targetField.SetUint(uint64(v))
+				}
+			}
+		case HRTIME:
+			v, err := dec.DecodeHRTime()
+			if err == nil {
+				if isMap {
+					target.SetMapIndex(targetMapKey, reflect.ValueOf(v))
+				} else {
+					// TODO: CONFIRM THIS IS OK
+					targetField.SetInt(int64(v))
+				}
+			}
+		case DOUBLE:
+			v, err := dec.DecodeFloat64()
+			if err == nil {
+				if isMap {
+					target.SetMapIndex(targetMapKey, reflect.ValueOf(v))
+				} else {
+					targetField.SetFloat(v)
+				}
+			}
+		case BOOLEAN_ARRAY:
+			v, err := dec.DecodeBoolArray()
+			if err == nil {
+				if isMap {
+					target.SetMapIndex(targetMapKey, reflect.ValueOf(v))
+				} else {
+					targetField.Set(reflect.ValueOf(v))
+				}
+			}
+		case BYTE_ARRAY:
+			if _, err = r.Seek(-4, 1); err == nil {
+				v, err := dec.DecodeByteArray()
+				if err == nil {
+					if isMap {
+						target.SetMapIndex(targetMapKey, reflect.ValueOf(v))
+					} else {
+						targetField.SetBytes(v)
+					}
+				}
+			}
+		case INT8_ARRAY:
+			v, err := dec.DecodeInt8Array()
+			if err == nil {
+				if isMap {
+					target.SetMapIndex(targetMapKey, reflect.ValueOf(v))
+				} else {
+					targetField.Set(reflect.ValueOf(v))
+				}
+			}
+		case INT16_ARRAY:
+			v, err := dec.DecodeInt16Array()
+			if err == nil {
+				if isMap {
+					target.SetMapIndex(targetMapKey, reflect.ValueOf(v))
+				} else {
+					targetField.Set(reflect.ValueOf(v))
+				}
+			}
+		case INT32_ARRAY:
+			v, err := dec.DecodeInt32Array()
+			if err == nil {
+				if isMap {
+					target.SetMapIndex(targetMapKey, reflect.ValueOf(v))
+				} else {
+					targetField.Set(reflect.ValueOf(v))
+				}
+			}
+		case INT64_ARRAY:
+			v, err := dec.DecodeInt64Array()
+			if err == nil {
+				if isMap {
+					target.SetMapIndex(targetMapKey, reflect.ValueOf(v))
+				} else {
+					targetField.Set(reflect.ValueOf(v))
+				}
+			}
+		case UINT8_ARRAY:
+			v, err := dec.DecodeUint8Array()
+			if err == nil {
+				if isMap {
+					target.SetMapIndex(targetMapKey, reflect.ValueOf(v))
+				} else {
+					targetField.Set(reflect.ValueOf(v))
+				}
+			}
+		case UINT16_ARRAY:
+			v, err := dec.DecodeUint16Array()
+			if err == nil {
+				if isMap {
+					target.SetMapIndex(targetMapKey, reflect.ValueOf(v))
+				} else {
+					targetField.Set(reflect.ValueOf(v))
+				}
+			}
+		case UINT32_ARRAY:
+			v, err := dec.DecodeUint32Array()
+			if err == nil {
+				if isMap {
+					target.SetMapIndex(targetMapKey, reflect.ValueOf(v))
+				} else {
+					targetField.Set(reflect.ValueOf(v))
+				}
+			}
+		case UINT64_ARRAY:
+			v, err := dec.DecodeUint64Array()
+			if err == nil {
+				if isMap {
+					target.SetMapIndex(targetMapKey, reflect.ValueOf(v))
+				} else {
+					targetField.Set(reflect.ValueOf(v))
+				}
+			}
+		case STRING:
+			v, err := dec.DecodeString()
+			if err == nil {
+				if isMap {
+					target.SetMapIndex(targetMapKey, reflect.ValueOf(v))
+				} else {
+					targetField.SetString(v)
+				}
+			}
+		case STRING_ARRAY:
+			if _, err = r.Seek(-4, 1); err == nil {
+				v, err := dec.DecodeStringArray()
+				if err == nil {
+					if isMap {
+						target.SetMapIndex(targetMapKey, reflect.ValueOf(v))
+					} else {
+						targetField.Set(reflect.ValueOf(v))
+					}
+				}
+			}
+		case NVLIST:
+			if isMap {
+				elem := reflect.Indirect(reflect.New(target.Type().Elem()))
+				err = decodeListStruct(r, elem)
+				if err == nil {
+					target.SetMapIndex(targetMapKey, elem)
+				}
+			} else {
+				elem := reflect.Indirect(reflect.New(targetField.Type()))
+				err = decodeListStruct(r, elem)
+				if err == nil {
+					targetField.Set(elem)
+				}
+			}
+		case NVLIST_ARRAY:
+			var sliceType reflect.Type
+			if isMap {
+				sliceType = target.Type().Elem()
+			} else {
+				sliceType = targetField.Type()
+			}
+			arr := reflect.MakeSlice(sliceType, 0, int(dataPair.NElements))
+			for i := uint32(0); i < dataPair.NElements; i++ {
+				elem := reflect.Indirect(reflect.New(sliceType.Elem()))
+				err = decodeListStruct(r, elem)
+				if err != nil {
+					break
+				}
+				arr = reflect.Append(arr, elem)
+			}
+
+			if isMap {
+				target.SetMapIndex(targetMapKey, arr)
+			} else {
+				targetField.Set(arr)
+			}
+		default:
+			return fmt.Errorf("unknown type: %v", dataPair.Type)
+		}
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// fieldIndexMap creates a map of field name, with optional tag name overrides,
+// to their index
+func fieldIndexMap(v reflect.Value) map[string]int {
+	vFieldIndexMap := make(map[string]int)
+	for i := 0; i < v.NumField(); i++ {
+		vField := v.Field(i)
+		// Skip fields that can't be set (e.g. unexported)
+		if !vField.CanSet() {
+			continue
+		}
+		vTypeField := v.Type().Field(i)
+		dataFieldName := vTypeField.Name
+		if tagFieldName := vTypeField.Tag.Get("nv"); tagFieldName != "" {
+			dataFieldName = tagFieldName
+		}
+		vFieldIndexMap[dataFieldName] = i
+	}
+	return vFieldIndexMap
 }
