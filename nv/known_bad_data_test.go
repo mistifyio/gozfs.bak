@@ -40,6 +40,5 @@ var encode_bad = []struct {
 	{"invalid Type 'UNKNOWN'", mList{"foo1": mVal{}}},
 	{"invalid Type 'dataType(28)'", mList{"foo2": mVal{Type: DOUBLE + 1}}},
 	{"xdr:Marshal: can't marshal nil interface", mList{"foo2": mVal{Type: DOUBLE}}},
-	//{"v is invalid", List{Pairs: []Pair{Pair{pair: pair{Type: NVLIST}}}}},
 	//{"empty NVLIST_ARRAY", List{Pairs: []Pair{Pair{pair: pair{Type: NVLIST_ARRAY}, Value: []List{}}}}},
 }

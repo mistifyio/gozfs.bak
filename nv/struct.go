@@ -134,18 +134,14 @@ func (p pair) encodedSize() int {
 		valSize = 8
 	case BYTE_ARRAY:
 		valSize = int(p.NElements * 1)
-	case INT8_ARRAY, UINT8_ARRAY, INT16_ARRAY, UINT16_ARRAY, INT32_ARRAY, UINT32_ARRAY:
+	case BOOLEAN_ARRAY, INT8_ARRAY, UINT8_ARRAY, INT16_ARRAY, UINT16_ARRAY, INT32_ARRAY, UINT32_ARRAY:
 		valSize = 4 + int(p.NElements*4)
 	case INT64_ARRAY, UINT64_ARRAY:
 		valSize = 4 + int(p.NElements*8)
 	case STRING:
 		valSize = 4 + len(p.data.(string)) + 1
-	case NVLIST:
+	case NVLIST, NVLIST_ARRAY:
 		valSize = len(p.data.([]byte))
-	case NVLIST_ARRAY:
-		valSize = len(p.data.([]byte))
-	case BOOLEAN_ARRAY:
-		valSize = 4 + int(p.NElements*4)
 	case STRING_ARRAY:
 		slice := p.data.([]string)
 		for i := range slice {

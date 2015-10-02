@@ -305,27 +305,33 @@ int main() {
 		fnvlist_free(l);
 	}
 
-	{
-		do_signed(hrtime, INT64);
-	}
-
+	do_signed(hrtime, INT64);
 
 	l = fnvlist_alloc();
 	nvlist_t *le = fnvlist_alloc();
-	//fnvlist_add_boolean_value(l, "false", B_FALSE);
-	//fnvlist_add_boolean_value(l, "true", B_TRUE);
 	fnvlist_add_boolean_value(le, "false", B_FALSE);
 	fnvlist_add_boolean_value(le, "true", B_TRUE);
 	fnvlist_add_nvlist(l, "nvlist", le);
 	print(l, "nvlist");
 	fnvlist_free(l);
 
-	l = fnvlist_alloc();
-	nvlist_t *larr[] = {le, le};
-	fnvlist_add_nvlist_array(l, "list,list", larr, 2);
-	print(l, "nvlist array");
-	fnvlist_free(le);
-	fnvlist_free(l);
+	/*
+	{
+		l = fnvlist_alloc();
+		nvlist_t *larr[] = {};
+		fnvlist_add_nvlist_array(l, "empty", larr, 0);
+		print(l, "empty nvlist array");
+		fnvlist_free(l);
+	}
+	*/
+	{
+		l = fnvlist_alloc();
+		nvlist_t *larr[] = {le, le};
+		fnvlist_add_nvlist_array(l, "list,list", larr, 2);
+		print(l, "nvlist array");
+		fnvlist_free(le);
+		fnvlist_free(l);
+	}
 
 	do_double(double, DBL);
 
