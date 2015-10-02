@@ -999,10 +999,12 @@ func decodeListStruct(r io.ReadSeeker, target reflect.Value) error {
 				arr = reflect.Append(arr, elem)
 			}
 
-			if isMap {
-				target.SetMapIndex(targetMapKey, arr)
-			} else {
-				targetField.Set(arr)
+			if err == nil {
+				if isMap {
+					target.SetMapIndex(targetMapKey, arr)
+				} else {
+					targetField.Set(arr)
+				}
 			}
 		default:
 			return fmt.Errorf("unknown type: %v", dataPair.Type)
@@ -1014,7 +1016,7 @@ func decodeListStruct(r io.ReadSeeker, target reflect.Value) error {
 	return nil
 }
 
-// fieldIndexMap creates a map of field name, with optional tag name overrides,
+// fieldIndexMap creates a map of field names, with optional tag name overrides,
 // to their index
 func fieldIndexMap(v reflect.Value) map[string]int {
 	vFieldIndexMap := make(map[string]int)
