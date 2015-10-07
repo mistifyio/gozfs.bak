@@ -230,12 +230,6 @@ int main() {
 		fnvlist_free(l);
 	}
 
-	{
-		l = fnvlist_alloc();
-		print(l, "empty");
-		fnvlist_free(l);
-	}
-
 	l = fnvlist_alloc();
 	fnvlist_add_byte(l, "-128", -128);
 	fnvlist_add_byte(l, "0", 0);
@@ -315,16 +309,23 @@ int main() {
 	print(l, "nvlist");
 	fnvlist_free(l);
 
-	/*
 	{
 		l = fnvlist_alloc();
-		nvlist_t *larr[] = {};
-		fnvlist_add_nvlist_array(l, "empty", larr, 0);
-		print(l, "empty nvlist array");
+        fnvlist_add_int8_array(l, "empty int8 array", {}, 0);
+        fnvlist_add_int16_array(l, "empty int16 array", {}, 0);
+        fnvlist_add_int32_array(l, "empty int32 array", {}, 0);
+        fnvlist_add_int64_array(l, "empty int64 array", {}, 0);
+        fnvlist_add_uint8_array(l, "empty uint8 array", {}, 0);
+        fnvlist_add_uint16_array(l, "empty uint16 array", {}, 0);
+        fnvlist_add_uint32_array(l, "empty uint32 array", {}, 0);
+        fnvlist_add_uint64_array(l, "empty uint64 array", {}, 0);
+        fnvlist_add_string_array(l, "empty string array", {}, 0);
+        fnvlist_add_nvlist_array(l, "empty nvlist array", {}, 0);
+        print(l, "empty arrays");
 		fnvlist_free(l);
 	}
-	*/
-	{
+
+    {
 		l = fnvlist_alloc();
 		nvlist_t *larr[] = {le, le};
 		fnvlist_add_nvlist_array(l, "list,list", larr, 2);

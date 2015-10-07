@@ -538,6 +538,12 @@ func decodeList(r io.ReadSeeker) (mList, error) {
 		if err != nil {
 			return nil, err
 		}
+		fmt.Printf("DP: %+v\n", p)
+
+		// Fix for empty arrays. Not sure why this works.
+		if p.NElements == 0 && p.Type != STRING_ARRAY && p.Type != NVLIST_ARRAY {
+			r.Seek(-4, 1)
+		}
 
 		var v interface{}
 		dec := newDecoder(r)
@@ -722,6 +728,11 @@ func decodeListStruct(r io.ReadSeeker, target reflect.Value) error {
 		dataPair := pair{}
 		if _, err := xdr.Unmarshal(r, &dataPair); err != nil {
 			return err
+		}
+
+		// Fix for empty arrays. Not sure why this works.
+		if dataPair.NElements == 0 && dataPair.Type != STRING_ARRAY && dataPair.Type != NVLIST_ARRAY {
+			r.Seek(-4, 1)
 		}
 
 		// If not dealing with a map, look up the corresponding struct field

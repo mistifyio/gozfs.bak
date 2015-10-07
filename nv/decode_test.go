@@ -8,9 +8,14 @@ import (
 )
 
 func check_array(t *testing.T, p mVal, l int, fn func([]string)) {
-	expecteds := strings.Split(p.Name, ",")
-	if len(expecteds) < 2 {
-		t.Fatal("p.Name does not seem to be a list of expected values:", p.Name)
+	var expecteds []string
+	if !strings.HasPrefix(p.Name, "empty") {
+		expecteds = strings.Split(p.Name, ",")
+		if len(expecteds) < 2 {
+			t.Fatal("p.Name does not seem to be a list of expected values:", p.Name)
+		}
+	} else {
+		fmt.Printf("p.Name: %s\np: %+v\n", p.Name, p.Value)
 	}
 	/*
 		if l != int(p.NElements) {
@@ -325,6 +330,7 @@ func init() {
 //go:generate make -C _test known_good_data_test.go
 func TestDecodeGood(t *testing.T) {
 	for _, s := range good {
+		fmt.Println("TEST CASE:", s.name)
 		l, err := Decode(s.payload)
 		if err != nil {
 			t.Fatal(s.name, "failed:", err)
